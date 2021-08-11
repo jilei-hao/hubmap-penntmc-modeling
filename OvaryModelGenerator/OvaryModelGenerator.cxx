@@ -13,9 +13,9 @@
 /**
  * This program generates an ellipsoid (closed surface, vtkPolyData) and converts it into volume
  * representation (vtkImageData) where the foreground voxels are 1 and the background voxels are
- * 0. The interior of the ellipsoid is then divded into 48 subsections: 12 long-axis slices, each
- * of which is rotationally subdivided into four subregions.  
- * Internally vtkPolyDataToImageStencil is utilized. The resultant multi-label image is saved to 
+ * 0. The interior of the ellipsoid is then divided into 48 subsections: 12 long-axis slices, each
+ * of which is rotationally subdivided into four subregions. Each subregion is assigned a unique 
+ * label. Internally vtkPolyDataToImageStencil is utilized. The resultant multi-label image is saved to 
  * disk in NiFTI file format (Ovary.nii).
  */
 int main(int, char *[])
