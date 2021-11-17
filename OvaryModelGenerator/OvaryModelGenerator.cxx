@@ -149,7 +149,7 @@ int main(int argc, char* argv[])
   for (int k = 0; k < dim[2]; k++)
     {
 
-      if (k >= step*slice_num)
+      if (k >= step*slice_num + 1)
         slice_num = slice_num + 1;
 
       for (int i = 0; i < dim[0]; i++)
