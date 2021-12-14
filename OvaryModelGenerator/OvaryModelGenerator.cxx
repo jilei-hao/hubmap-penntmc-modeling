@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
   if( argc < 6 )
     {
     std::cerr << "Usage: " << std::endl;
-    std::cerr << argv[0] << " nslices nrot" << std::endl;
+    std::cerr << argv[0] << " nslices nrot d h w" << std::endl;
     std::cerr << "  nslices is an integer number of sections along the long-axis" << std::endl;
     std::cerr << "  nrot is an integer number of rotational sections (1, 2, or 4)" << std::endl;
     std::cerr << "  d is the anterior-posterior (shortest) ovary dimension in mm" << std::endl;
