@@ -30,12 +30,13 @@ int main(int argc, char* argv[])
   if( argc < 6 )
     {
     std::cerr << "Usage: " << std::endl;
-    std::cerr << argv[0] << " nslices nrot d h w" << std::endl;
+    std::cerr << argv[0] << " nslices nrot d h w fnimg fnmesh" << std::endl;
     std::cerr << "  nslices is an integer number of sections along the long-axis" << std::endl;
     std::cerr << "  nrot is an integer number of rotational sections (1, 2, or 4)" << std::endl;
     std::cerr << "  d is the anterior-posterior (shortest) ovary dimension in mm" << std::endl;
     std::cerr << "  h is the superior-inferior ovary dimension in mm" << std::endl; 
     std::cerr << "  w is the medial-lateral (longest) ovary dimension in mm" << std::endl; 
+    std::cerr << "  outdir is the directory for the output files. Default is current directory" << std::endl;
     return EXIT_FAILURE;
     }
 
@@ -45,6 +46,19 @@ int main(int argc, char* argv[])
   double d = atoi(argv[3]);
   double h = atoi(argv[4]);
   double w = atoi(argv[5]);
+  char *outdir = argv[6];
+
+  // if outdir does not include a '/', add it
+  std::string outdirstr = outdir;
+  outdirstr += ((outdir[strlen(outdir) - 1] == '/') ? "" : "/"); 
+
+  std::string filename = "Ovary";
+  std::string fnimg = outdirstr + filename + ".nii";
+  std::string fnmesh = outdirstr + filename + ".vtk";
+
+  std::cout << "fnimg=" << fnimg << std::endl;
+  std::cout << "fnmesh=" << fnmesh << std::endl;
+
 
   double Rsphere = 30;
   double sx = 0.5*d/Rsphere;
@@ -209,7 +223,7 @@ int main(int argc, char* argv[])
   // write the label image
   vtkSmartPointer<vtkNIFTIImageWriter> writer = 
     vtkSmartPointer<vtkNIFTIImageWriter>::New();
-  writer->SetFileName("Ovary.nii");
+  writer->SetFileName(fnimg.c_str());
 #if VTK_MAJOR_VERSION <= 5
   writer->SetInput(mlImage);
 #else
@@ -303,7 +317,7 @@ int main(int argc, char* argv[])
   // write the label mesh
   vtkSmartPointer<vtkPolyDataWriter> meshWriter = 
     vtkSmartPointer<vtkPolyDataWriter>::New();
-  meshWriter->SetFileName("Ovary.vtk");
+  meshWriter->SetFileName(fnmesh.c_str());
 #if VTK_MAJOR_VERSION <= 5
   meshWriter->SetInput(mesh);
 #else

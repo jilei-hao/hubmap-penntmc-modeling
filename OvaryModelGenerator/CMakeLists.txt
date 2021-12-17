@@ -8,7 +8,7 @@ include(${VTK_USE_FILE})
 find_package(ITK REQUIRED)
 include(${ITK_USE_FILE})
 
-add_executable(OvaryModelGenerator MACOSX_BUNDLE OvaryModelGenerator.cxx)
+add_executable(OvaryModelGenerator OvaryModelGenerator.cxx)
 
 if(VTK_LIBRARIES)
   target_link_libraries(OvaryModelGenerator ${VTK_LIBRARIES})
