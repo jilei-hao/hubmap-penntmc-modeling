@@ -1,11 +1,9 @@
-#include <vtkVersion.h>
 #include <vtkSmartPointer.h>
 #include <vtkPolyData.h>
 #include <vtkTransform.h>
 #include <vtkTransformPolyDataFilter.h>
 #include <vtkImageData.h>
 #include <vtkSphereSource.h>
-#include <vtkNIFTIImageWriter.h>
 #include <vtkPolyDataToImageStencil.h>
 #include <vtkImageStencil.h>
 #include <vtkPointData.h>
@@ -59,7 +57,6 @@ int main(int argc, char* argv[])
   std::cout << "fnimg=" << fnimg << std::endl;
   std::cout << "fnmesh=" << fnmesh << std::endl;
 
-
   double Rsphere = 30;
   double sx = 0.5*d/Rsphere;
   double sy = 0.5*h/Rsphere;
@@ -104,7 +101,7 @@ int main(int argc, char* argv[])
     dim[i] = static_cast<int>(ceil((bounds[5] - bounds[4])/spacing[2])+1); 
     std::cerr << "dim " << dim[i] << std::endl;
     std::cerr << "bounds[] " << bounds[3] << " " << bounds[4] << " " << bounds[5] << endl;
-   }
+    }
   whiteImage->SetDimensions(dim);
   whiteImage->SetExtent(-1, dim[0] - 1, -1, dim[1] - 1, -1, dim[2] - 1);
 
@@ -163,17 +160,16 @@ int main(int argc, char* argv[])
   for (int k = 0; k < dim[2]; k++)
     {
 
-      if (k >= step*slice_num + 1)
-        slice_num = slice_num + 1;
+    if (k >= step*slice_num + 1)
+      slice_num = slice_num + 1;
 
-      for (int i = 0; i < dim[0]; i++)
+    for (int i = 0; i < dim[0]; i++)
+      {
+      for (int j = 0; j < dim[1]; j++)
         {
-          for (int j = 0; j < dim[1]; j++)
-            {
-
         // pixel value
-		unsigned char* pix = 
-		  static_cast<unsigned char*>(mlImage->GetScalarPointer(i,j,k));
+        unsigned char* pix = 
+          static_cast<unsigned char*>(mlImage->GetScalarPointer(i,j,k));
 
         // pixel physical coordinates
         int ijk[3];
@@ -185,11 +181,13 @@ int main(int argc, char* argv[])
         double* coords = 
           static_cast<double*>(mlImage->GetPoint(id));
 
-        if (nrot == 1){
-            pix[0] = pix[0] + pix[0]*(slice_num-1);
+        if (nrot == 1)
+          {
+          pix[0] = pix[0] + pix[0]*(slice_num-1);
           }
 
-        if (nrot == 2){        
+        if (nrot == 2)
+          {        
           // determine which on side of the 45-deg plane the pixel is located 
           // and assign label
           double s45 = 0.7071*coords[0] + 0.7071*coords[1];
@@ -199,37 +197,42 @@ int main(int argc, char* argv[])
             pix[0] = pix[0] + pix[0]*(slice_num-1+2*nslices);
           }
 
-        if (nrot == 4){
-
+        if (nrot == 4)
+          {
           double s45 = 0.7071*coords[0] + 0.7071*coords[1];
           double s135 = -0.7071*coords[0] + 0.7071*coords[1];
-          if (s45 > 0){
+          if (s45 > 0)
+            {
             if (s135 > 0)
-                pix[0] = pix[0] + pix[0]*(slice_num-1+nslices);
+              pix[0] = pix[0] + pix[0]*(slice_num-1+nslices);
             else
-                pix[0] = pix[0] + pix[0]*(slice_num-1); 
+              pix[0] = pix[0] + pix[0]*(slice_num-1); 
             }
-          else{
+          else
+            {
             if (s135 > 0)
-                pix[0] = pix[0] + pix[0]*(slice_num-1+2*nslices);
+              pix[0] = pix[0] + pix[0]*(slice_num-1+2*nslices);
             else
-                pix[0] = pix[0] + pix[0]*(slice_num-1+3*nslices);
+              pix[0] = pix[0] + pix[0]*(slice_num-1+3*nslices);
             }
           }
         }
       }
     }
 
+/*
   // write the label image
   vtkSmartPointer<vtkNIFTIImageWriter> writer = 
     vtkSmartPointer<vtkNIFTIImageWriter>::New();
   writer->SetFileName(fnimg.c_str());
+
 #if VTK_MAJOR_VERSION <= 5
   writer->SetInput(mlImage);
 #else
   writer->SetInputData(mlImage);
 #endif
   writer->Write();  
+  */
 
   // Run marching cubes on the image to convert it back to VTK polydata
   vtkPolyData *pipe_tail;
