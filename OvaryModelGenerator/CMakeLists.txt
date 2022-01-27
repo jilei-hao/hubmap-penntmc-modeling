@@ -12,6 +12,8 @@ find_package(VTK COMPONENTS
   vtkFiltersSources
   vtkImagingStencil
   vtkIOLegacy
+  vtkIOImage
+  vtkIOXML
   QUIET
 )
 

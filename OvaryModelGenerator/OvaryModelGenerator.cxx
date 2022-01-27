@@ -12,6 +12,9 @@
 #include <vtkUnsignedShortArray.h>
 #include <vtkAppendPolyData.h>
 #include <vtkPolyDataWriter.h>
+#include <vtkNIFTIImageWriter.h>
+#include <vtkXMLPolyDataWriter.h>
+#include <vtkWindowedSincPolyDataFilter.h>
 
 /**
  * This program generates an ellipsoid (closed surface, vtkPolyData) and converts it into volume
@@ -44,7 +47,7 @@ int main(int argc, char* argv[])
   double d = atoi(argv[3]);
   double h = atoi(argv[4]);
   double w = atoi(argv[5]);
-  char *outdir = argv[6];
+  const char *outdir = (argc < 6 ? "./output" : argv[6]);
 
   // if outdir does not include a '/', add it
   std::string outdirstr = outdir;
@@ -53,9 +56,11 @@ int main(int argc, char* argv[])
   std::string filename = "Ovary";
   std::string fnimg = outdirstr + filename + ".nii";
   std::string fnmesh = outdirstr + filename + ".vtk";
+  std::string fnxml = outdirstr + filename + ".vtp";
+  std::string fnjson = outdirstr + filename;
 
-  std::cout << "fnimg=" << fnimg << std::endl;
-  std::cout << "fnmesh=" << fnmesh << std::endl;
+  //std::cout << "fnimg=" << fnimg << std::endl;
+  //std::cout << "fnmesh=" << fnmesh << std::endl;
 
   double Rsphere = 30;
   double sx = 0.5*d/Rsphere;
@@ -99,8 +104,8 @@ int main(int argc, char* argv[])
     {
     //dim[i] = static_cast<int>(ceil((bounds[i * 2 + 1] - bounds[i * 2]) / spacing[i])+1);
     dim[i] = static_cast<int>(ceil((bounds[5] - bounds[4])/spacing[2])+1); 
-    std::cerr << "dim " << dim[i] << std::endl;
-    std::cerr << "bounds[] " << bounds[3] << " " << bounds[4] << " " << bounds[5] << endl;
+    //std::cerr << "dim " << dim[i] << std::endl;
+    //std::cerr << "bounds[] " << bounds[3] << " " << bounds[4] << " " << bounds[5] << endl;
     }
   whiteImage->SetDimensions(dim);
   whiteImage->SetExtent(-1, dim[0] - 1, -1, dim[1] - 1, -1, dim[2] - 1);
@@ -111,12 +116,8 @@ int main(int argc, char* argv[])
   origin[2] = bounds[4] + spacing[2] / 2;
   whiteImage->SetOrigin(origin);
 
-#if VTK_MAJOR_VERSION <= 5
-  whiteImage->SetScalarTypeToUnsignedChar();
-  whiteImage->AllocateScalars();
-#else
   whiteImage->AllocateScalars(VTK_UNSIGNED_CHAR,1);
-#endif
+
   // fill the image with foreground voxels:
   unsigned char inval = 1;
   unsigned char outval = 0;
@@ -129,11 +130,8 @@ int main(int argc, char* argv[])
   // polygonal data --> image stencil:
   vtkSmartPointer<vtkPolyDataToImageStencil> pol2stenc = 
     vtkSmartPointer<vtkPolyDataToImageStencil>::New();
-#if VTK_MAJOR_VERSION <= 5
-  pol2stenc->SetInput(pd_trans);
-#else
+
   pol2stenc->SetInputData(pd_trans);
-#endif
   pol2stenc->SetOutputOrigin(origin);
   pol2stenc->SetOutputSpacing(spacing);
   pol2stenc->SetOutputWholeExtent(whiteImage->GetExtent());
@@ -142,13 +140,9 @@ int main(int argc, char* argv[])
   // cut the corresponding white image and set the background
   vtkSmartPointer<vtkImageStencil> imgstenc = 
     vtkSmartPointer<vtkImageStencil>::New();
-#if VTK_MAJOR_VERSION <= 5
-  imgstenc->SetInput(whiteImage);
-  imgstenc->SetStencil(pol2stenc->GetOutput());
-#else
+
   imgstenc->SetInputData(whiteImage);
   imgstenc->SetStencilConnection(pol2stenc->GetOutputPort());
-#endif
   imgstenc->ReverseStencilOff();
   imgstenc->SetBackgroundValue(outval);
   imgstenc->Update();
@@ -194,7 +188,7 @@ int main(int argc, char* argv[])
           if (s45 > 0)
             pix[0] = pix[0] + pix[0]*(slice_num-1); 
           else
-            pix[0] = pix[0] + pix[0]*(slice_num-1+2*nslices);
+            pix[0] = pix[0] + pix[0]*(slice_num-1+nslices);
           }
 
         if (nrot == 4)
@@ -220,19 +214,15 @@ int main(int argc, char* argv[])
       }
     }
 
+
 /*
-  // write the label image
+  // write the label image for troubleshooting
   vtkSmartPointer<vtkNIFTIImageWriter> writer = 
     vtkSmartPointer<vtkNIFTIImageWriter>::New();
   writer->SetFileName(fnimg.c_str());
-
-#if VTK_MAJOR_VERSION <= 5
-  writer->SetInput(mlImage);
-#else
   writer->SetInputData(mlImage);
-#endif
-  writer->Write();  
-  */
+  writer->Write();
+*/
 
   // Run marching cubes on the image to convert it back to VTK polydata
   vtkPolyData *pipe_tail;
@@ -251,7 +241,7 @@ int main(int argc, char* argv[])
     {
      float lbl = floor(i);
 
-     std::cout << "  -- Processing Label: " << lbl << std::endl;
+     // std::cout << "  -- Processing Label: " << lbl << std::endl;
 
      // Extract one label
      vtkDiscreteMarchingCubes *fltDMC = vtkDiscreteMarchingCubes::New();
@@ -318,15 +308,28 @@ int main(int argc, char* argv[])
   //  }
 
   // write the label mesh
+  /*
   vtkSmartPointer<vtkPolyDataWriter> meshWriter = 
     vtkSmartPointer<vtkPolyDataWriter>::New();
+  
   meshWriter->SetFileName(fnmesh.c_str());
-#if VTK_MAJOR_VERSION <= 5
-  meshWriter->SetInput(mesh);
-#else
   meshWriter->SetInputData(mesh);
-#endif
-  meshWriter->Write();  
+  meshWriter->Write();
+  */
+
+  // smoothing
+  vtkNew<vtkWindowedSincPolyDataFilter> smoothFilter;
+  smoothFilter->SetInputData(mesh);
+  smoothFilter->SetNumberOfIterations(20);
+  smoothFilter->SetPassBand(0.001);
+  smoothFilter->SetNonManifoldSmoothing(false);
+  smoothFilter->Update();
+  
+  // write vtp mesh
+  vtkNew<vtkXMLPolyDataWriter> xmlWriter;
+  xmlWriter->SetFileName(fnxml.c_str());
+  xmlWriter->SetInputData(smoothFilter->GetOutput());
+  xmlWriter->Write();
 
   return EXIT_SUCCESS;
 }
