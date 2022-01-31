@@ -47,7 +47,7 @@ int main(int argc, char* argv[])
   double d = atoi(argv[3]);
   double h = atoi(argv[4]);
   double w = atoi(argv[5]);
-  const char *outdir = (argc < 6 ? "./output" : argv[6]);
+  const char *outdir = (argc < 7 ? "./output" : argv[6]);
 
   // if outdir does not include a '/', add it
   std::string outdirstr = outdir;
@@ -138,8 +138,7 @@ int main(int argc, char* argv[])
   pol2stenc->Update();
 
   // cut the corresponding white image and set the background
-  vtkSmartPointer<vtkImageStencil> imgstenc = 
-    vtkSmartPointer<vtkImageStencil>::New();
+  vtkNew<vtkImageStencil> imgstenc;
 
   imgstenc->SetInputData(whiteImage);
   imgstenc->SetStencilConnection(pol2stenc->GetOutputPort());
@@ -148,15 +147,19 @@ int main(int argc, char* argv[])
   imgstenc->Update();
 
   // update pixel values along long axis of ellipsoid
-  int step = ceil(dim[2]/nslices);
+  double step = (double)dim[2]/nslices;
   int slice_num = 1;
+
+  // std::cout << "dim[2]=" << dim[2] << std::endl;
+  // std::cout << "step=" << step << std::endl;
+
   vtkSmartPointer<vtkImageData> mlImage = imgstenc->GetOutput();
+
   for (int k = 0; k < dim[2]; k++)
     {
-
-    if (k >= step*slice_num + 1)
+    if (k > step*slice_num)
       slice_num = slice_num + 1;
-
+      
     for (int i = 0; i < dim[0]; i++)
       {
       for (int j = 0; j < dim[1]; j++)
@@ -215,14 +218,14 @@ int main(int argc, char* argv[])
     }
 
 
-/*
+
   // write the label image for troubleshooting
   vtkSmartPointer<vtkNIFTIImageWriter> writer = 
     vtkSmartPointer<vtkNIFTIImageWriter>::New();
   writer->SetFileName(fnimg.c_str());
   writer->SetInputData(mlImage);
   writer->Write();
-*/
+
 
   // Run marching cubes on the image to convert it back to VTK polydata
   vtkPolyData *pipe_tail;
@@ -237,35 +240,38 @@ int main(int argc, char* argv[])
   else
     imax = nrot * nslices;
 
+  std::cout << "imax: " << imax << std::endl;
+
   for (float i = 1; i <= imax; i += 1.0)
     {
-     float lbl = floor(i);
+    
+    float lbl = floor(i);
 
-     // std::cout << "  -- Processing Label: " << lbl << std::endl;
+    std::cout << "  -- Processing Label: " << lbl << std::endl;
 
-     // Extract one label
-     vtkDiscreteMarchingCubes *fltDMC = vtkDiscreteMarchingCubes::New();
-     fltDMC->SetInputData(mlImage);
-     fltDMC->ComputeGradientsOff();
-     fltDMC->ComputeScalarsOff();
-     fltDMC->SetNumberOfContours(1);
-     fltDMC->ComputeNormalsOn();
-     fltDMC->SetValue(0, lbl);
-     fltDMC->Update();
+    // Extract one label
+    vtkDiscreteMarchingCubes *fltDMC = vtkDiscreteMarchingCubes::New();
+    fltDMC->SetInputData(mlImage);
+    fltDMC->ComputeGradientsOff();
+    fltDMC->ComputeScalarsOff();
+    fltDMC->SetNumberOfContours(1);
+    fltDMC->ComputeNormalsOn();
+    fltDMC->SetValue(0, lbl);
+    fltDMC->Update();
 
-     vtkPolyData *labelMesh = fltDMC->GetOutput();
+    vtkPolyData *labelMesh = fltDMC->GetOutput();
 
-     // Set scalar values for the label
-     vtkUnsignedShortArray *scalar = vtkUnsignedShortArray::New();
-     scalar->SetNumberOfComponents(1);
-     for (vtkIdType i = 0; i < labelMesh->GetNumberOfPoints(); ++i)
-       {
-       scalar->InsertNextTuple1(lbl);
-       }
+    // Set scalar values for the label
+    vtkUnsignedShortArray *scalar = vtkUnsignedShortArray::New();
+    scalar->SetNumberOfComponents(1);
+    for (vtkIdType i = 0; i < labelMesh->GetNumberOfPoints(); ++i)
+      {
+      scalar->InsertNextTuple1(lbl);
+      }
 
-       scalar->SetName("Label");
-       labelMesh->GetPointData()->SetScalars(scalar);
-       fltAppend->AddInputData(labelMesh);
+    scalar->SetName("Label");
+    labelMesh->GetPointData()->SetScalars(scalar);
+    fltAppend->AddInputData(labelMesh);
     }
 
   fltAppend->Update();
