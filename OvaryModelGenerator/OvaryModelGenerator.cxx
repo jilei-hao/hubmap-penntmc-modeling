@@ -31,13 +31,13 @@ int main(int argc, char* argv[])
   if( argc < 6 )
     {
     std::cerr << "Usage: " << std::endl;
-    std::cerr << argv[0] << " nslices nrot d h w fnimg fnmesh" << std::endl;
+    std::cerr << argv[0] << " nslices nrot d h w outdir" << std::endl;
     std::cerr << "  nslices is an integer number of sections along the long-axis" << std::endl;
     std::cerr << "  nrot is an integer number of rotational sections (1, 2, or 4)" << std::endl;
     std::cerr << "  d is the anterior-posterior (shortest) ovary dimension in mm" << std::endl;
     std::cerr << "  h is the superior-inferior ovary dimension in mm" << std::endl; 
     std::cerr << "  w is the medial-lateral (longest) ovary dimension in mm" << std::endl; 
-    std::cerr << "  outdir is the directory for the output files. Default is current directory" << std::endl;
+    std::cerr << "  outdir is the optional directory for the output files. Default is current directory" << std::endl;
     return EXIT_FAILURE;
     }
 
@@ -219,12 +219,14 @@ int main(int argc, char* argv[])
 
 
 
+/*
   // write the label image for troubleshooting
   vtkSmartPointer<vtkNIFTIImageWriter> writer = 
     vtkSmartPointer<vtkNIFTIImageWriter>::New();
   writer->SetFileName(fnimg.c_str());
   writer->SetInputData(mlImage);
   writer->Write();
+*/
 
 
   // Run marching cubes on the image to convert it back to VTK polydata
