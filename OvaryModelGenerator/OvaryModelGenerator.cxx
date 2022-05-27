@@ -1,11 +1,9 @@
-#include <vtkVersion.h>
 #include <vtkSmartPointer.h>
 #include <vtkPolyData.h>
 #include <vtkTransform.h>
 #include <vtkTransformPolyDataFilter.h>
 #include <vtkImageData.h>
 #include <vtkSphereSource.h>
-#include <vtkNIFTIImageWriter.h>
 #include <vtkPolyDataToImageStencil.h>
 #include <vtkImageStencil.h>
 #include <vtkPointData.h>
@@ -14,6 +12,9 @@
 #include <vtkUnsignedShortArray.h>
 #include <vtkAppendPolyData.h>
 #include <vtkPolyDataWriter.h>
+#include <vtkNIFTIImageWriter.h>
+#include <vtkXMLPolyDataWriter.h>
+#include <vtkWindowedSincPolyDataFilter.h>
 
 /**
  * This program generates an ellipsoid (closed surface, vtkPolyData) and converts it into volume
@@ -30,12 +31,13 @@ int main(int argc, char* argv[])
   if( argc < 6 )
     {
     std::cerr << "Usage: " << std::endl;
-    std::cerr << argv[0] << " nslices nrot" << std::endl;
+    std::cerr << argv[0] << " nslices nrot d h w outdir" << std::endl;
     std::cerr << "  nslices is an integer number of sections along the long-axis" << std::endl;
     std::cerr << "  nrot is an integer number of rotational sections (1, 2, or 4)" << std::endl;
     std::cerr << "  d is the anterior-posterior (shortest) ovary dimension in mm" << std::endl;
     std::cerr << "  h is the superior-inferior ovary dimension in mm" << std::endl; 
     std::cerr << "  w is the medial-lateral (longest) ovary dimension in mm" << std::endl; 
+    std::cerr << "  outdir is the optional directory for the output files. Default is current directory" << std::endl;
     return EXIT_FAILURE;
     }
 
@@ -45,6 +47,20 @@ int main(int argc, char* argv[])
   double d = atoi(argv[3]);
   double h = atoi(argv[4]);
   double w = atoi(argv[5]);
+  const char *outdir = (argc < 7 ? "./output" : argv[6]);
+
+  // if outdir does not include a '/', add it
+  std::string outdirstr = outdir;
+  outdirstr += ((outdir[strlen(outdir) - 1] == '/') ? "" : "/"); 
+
+  std::string filename = "Ovary";
+  std::string fnimg = outdirstr + filename + ".nii";
+  std::string fnmesh = outdirstr + filename + ".vtk";
+  std::string fnxml = outdirstr + filename + ".vtp";
+  std::string fnjson = outdirstr + filename;
+
+  //std::cout << "fnimg=" << fnimg << std::endl;
+  //std::cout << "fnmesh=" << fnmesh << std::endl;
 
   double Rsphere = 30;
   double sx = 0.5*d/Rsphere;
@@ -88,9 +104,9 @@ int main(int argc, char* argv[])
     {
     //dim[i] = static_cast<int>(ceil((bounds[i * 2 + 1] - bounds[i * 2]) / spacing[i])+1);
     dim[i] = static_cast<int>(ceil((bounds[5] - bounds[4])/spacing[2])+1); 
-    std::cerr << "dim " << dim[i] << std::endl;
-    std::cerr << "bounds[] " << bounds[3] << " " << bounds[4] << " " << bounds[5] << endl;
-   }
+    //std::cerr << "dim " << dim[i] << std::endl;
+    //std::cerr << "bounds[] " << bounds[3] << " " << bounds[4] << " " << bounds[5] << endl;
+    }
   whiteImage->SetDimensions(dim);
   whiteImage->SetExtent(-1, dim[0] - 1, -1, dim[1] - 1, -1, dim[2] - 1);
 
@@ -100,12 +116,8 @@ int main(int argc, char* argv[])
   origin[2] = bounds[4] + spacing[2] / 2;
   whiteImage->SetOrigin(origin);
 
-#if VTK_MAJOR_VERSION <= 5
-  whiteImage->SetScalarTypeToUnsignedChar();
-  whiteImage->AllocateScalars();
-#else
   whiteImage->AllocateScalars(VTK_UNSIGNED_CHAR,1);
-#endif
+
   // fill the image with foreground voxels:
   unsigned char inval = 1;
   unsigned char outval = 0;
@@ -118,48 +130,43 @@ int main(int argc, char* argv[])
   // polygonal data --> image stencil:
   vtkSmartPointer<vtkPolyDataToImageStencil> pol2stenc = 
     vtkSmartPointer<vtkPolyDataToImageStencil>::New();
-#if VTK_MAJOR_VERSION <= 5
-  pol2stenc->SetInput(pd_trans);
-#else
+
   pol2stenc->SetInputData(pd_trans);
-#endif
   pol2stenc->SetOutputOrigin(origin);
   pol2stenc->SetOutputSpacing(spacing);
   pol2stenc->SetOutputWholeExtent(whiteImage->GetExtent());
   pol2stenc->Update();
 
   // cut the corresponding white image and set the background
-  vtkSmartPointer<vtkImageStencil> imgstenc = 
-    vtkSmartPointer<vtkImageStencil>::New();
-#if VTK_MAJOR_VERSION <= 5
-  imgstenc->SetInput(whiteImage);
-  imgstenc->SetStencil(pol2stenc->GetOutput());
-#else
+  vtkNew<vtkImageStencil> imgstenc;
+
   imgstenc->SetInputData(whiteImage);
   imgstenc->SetStencilConnection(pol2stenc->GetOutputPort());
-#endif
   imgstenc->ReverseStencilOff();
   imgstenc->SetBackgroundValue(outval);
   imgstenc->Update();
 
   // update pixel values along long axis of ellipsoid
-  int step = ceil(dim[2]/nslices);
+  double step = (double)dim[2]/nslices;
   int slice_num = 1;
+
+  // std::cout << "dim[2]=" << dim[2] << std::endl;
+  // std::cout << "step=" << step << std::endl;
+
   vtkSmartPointer<vtkImageData> mlImage = imgstenc->GetOutput();
+
   for (int k = 0; k < dim[2]; k++)
     {
-
-      if (k >= step*slice_num + 1)
-        slice_num = slice_num + 1;
-
-      for (int i = 0; i < dim[0]; i++)
+    if (k > step*slice_num)
+      slice_num = slice_num + 1;
+      
+    for (int i = 0; i < dim[0]; i++)
+      {
+      for (int j = 0; j < dim[1]; j++)
         {
-          for (int j = 0; j < dim[1]; j++)
-            {
-
         // pixel value
-		unsigned char* pix = 
-		  static_cast<unsigned char*>(mlImage->GetScalarPointer(i,j,k));
+        unsigned char* pix = 
+          static_cast<unsigned char*>(mlImage->GetScalarPointer(i,j,k));
 
         // pixel physical coordinates
         int ijk[3];
@@ -171,51 +178,56 @@ int main(int argc, char* argv[])
         double* coords = 
           static_cast<double*>(mlImage->GetPoint(id));
 
-        if (nrot == 1){
-            pix[0] = pix[0] + pix[0]*(slice_num-1);
+        if (nrot == 1)
+          {
+          pix[0] = pix[0] + pix[0]*(slice_num-1);
           }
 
-        if (nrot == 2){        
+        if (nrot == 2)
+          {        
           // determine which on side of the 45-deg plane the pixel is located 
           // and assign label
           double s45 = 0.7071*coords[0] + 0.7071*coords[1];
           if (s45 > 0)
             pix[0] = pix[0] + pix[0]*(slice_num-1); 
           else
-            pix[0] = pix[0] + pix[0]*(slice_num-1+2*nslices);
+            pix[0] = pix[0] + pix[0]*(slice_num-1+nslices);
           }
 
-        if (nrot == 4){
-
+        if (nrot == 4)
+          {
           double s45 = 0.7071*coords[0] + 0.7071*coords[1];
           double s135 = -0.7071*coords[0] + 0.7071*coords[1];
-          if (s45 > 0){
+          if (s45 > 0)
+            {
             if (s135 > 0)
-                pix[0] = pix[0] + pix[0]*(slice_num-1+nslices);
+              pix[0] = pix[0] + pix[0]*(slice_num-1+nslices);
             else
-                pix[0] = pix[0] + pix[0]*(slice_num-1); 
+              pix[0] = pix[0] + pix[0]*(slice_num-1); 
             }
-          else{
+          else
+            {
             if (s135 > 0)
-                pix[0] = pix[0] + pix[0]*(slice_num-1+2*nslices);
+              pix[0] = pix[0] + pix[0]*(slice_num-1+2*nslices);
             else
-                pix[0] = pix[0] + pix[0]*(slice_num-1+3*nslices);
+              pix[0] = pix[0] + pix[0]*(slice_num-1+3*nslices);
             }
           }
         }
       }
     }
 
-  // write the label image
+
+
+/*
+  // write the label image for troubleshooting
   vtkSmartPointer<vtkNIFTIImageWriter> writer = 
     vtkSmartPointer<vtkNIFTIImageWriter>::New();
-  writer->SetFileName("Ovary.nii");
-#if VTK_MAJOR_VERSION <= 5
-  writer->SetInput(mlImage);
-#else
+  writer->SetFileName(fnimg.c_str());
   writer->SetInputData(mlImage);
-#endif
-  writer->Write();  
+  writer->Write();
+*/
+
 
   // Run marching cubes on the image to convert it back to VTK polydata
   vtkPolyData *pipe_tail;
@@ -230,35 +242,38 @@ int main(int argc, char* argv[])
   else
     imax = nrot * nslices;
 
+  std::cout << "imax: " << imax << std::endl;
+
   for (float i = 1; i <= imax; i += 1.0)
     {
-     float lbl = floor(i);
+    
+    float lbl = floor(i);
 
-     std::cout << "  -- Processing Label: " << lbl << std::endl;
+    std::cout << "  -- Processing Label: " << lbl << std::endl;
 
-     // Extract one label
-     vtkDiscreteMarchingCubes *fltDMC = vtkDiscreteMarchingCubes::New();
-     fltDMC->SetInputData(mlImage);
-     fltDMC->ComputeGradientsOff();
-     fltDMC->ComputeScalarsOff();
-     fltDMC->SetNumberOfContours(1);
-     fltDMC->ComputeNormalsOn();
-     fltDMC->SetValue(0, lbl);
-     fltDMC->Update();
+    // Extract one label
+    vtkDiscreteMarchingCubes *fltDMC = vtkDiscreteMarchingCubes::New();
+    fltDMC->SetInputData(mlImage);
+    fltDMC->ComputeGradientsOff();
+    fltDMC->ComputeScalarsOff();
+    fltDMC->SetNumberOfContours(1);
+    fltDMC->ComputeNormalsOn();
+    fltDMC->SetValue(0, lbl);
+    fltDMC->Update();
 
-     vtkPolyData *labelMesh = fltDMC->GetOutput();
+    vtkPolyData *labelMesh = fltDMC->GetOutput();
 
-     // Set scalar values for the label
-     vtkUnsignedShortArray *scalar = vtkUnsignedShortArray::New();
-     scalar->SetNumberOfComponents(1);
-     for (vtkIdType i = 0; i < labelMesh->GetNumberOfPoints(); ++i)
-       {
-       scalar->InsertNextTuple1(lbl);
-       }
+    // Set scalar values for the label
+    vtkUnsignedShortArray *scalar = vtkUnsignedShortArray::New();
+    scalar->SetNumberOfComponents(1);
+    for (vtkIdType i = 0; i < labelMesh->GetNumberOfPoints(); ++i)
+      {
+      scalar->InsertNextTuple1(lbl);
+      }
 
-       scalar->SetName("Label");
-       labelMesh->GetPointData()->SetScalars(scalar);
-       fltAppend->AddInputData(labelMesh);
+    scalar->SetName("Label");
+    labelMesh->GetPointData()->SetScalars(scalar);
+    fltAppend->AddInputData(labelMesh);
     }
 
   fltAppend->Update();
@@ -301,15 +316,28 @@ int main(int argc, char* argv[])
   //  }
 
   // write the label mesh
+  /*
   vtkSmartPointer<vtkPolyDataWriter> meshWriter = 
     vtkSmartPointer<vtkPolyDataWriter>::New();
-  meshWriter->SetFileName("Ovary.vtk");
-#if VTK_MAJOR_VERSION <= 5
-  meshWriter->SetInput(mesh);
-#else
+  
+  meshWriter->SetFileName(fnmesh.c_str());
   meshWriter->SetInputData(mesh);
-#endif
-  meshWriter->Write();  
+  meshWriter->Write();
+  */
+
+  // smoothing
+  vtkNew<vtkWindowedSincPolyDataFilter> smoothFilter;
+  smoothFilter->SetInputData(mesh);
+  smoothFilter->SetNumberOfIterations(20);
+  smoothFilter->SetPassBand(0.001);
+  smoothFilter->SetNonManifoldSmoothing(false);
+  smoothFilter->Update();
+  
+  // write vtp mesh
+  vtkNew<vtkXMLPolyDataWriter> xmlWriter;
+  xmlWriter->SetFileName(fnxml.c_str());
+  xmlWriter->SetInputData(smoothFilter->GetOutput());
+  xmlWriter->Write();
 
   return EXIT_SUCCESS;
 }
