@@ -3,17 +3,23 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 PROJECT(OvaryModelGenerator)
 
 find_package(VTK COMPONENTS 
-  vtkCommonColor
-  vtkCommonCore
-  vtkCommonDataModel
-  vtkCommonTransforms
-  vtkFiltersCore
-  vtkFiltersGeneral
-  vtkFiltersSources
-  vtkImagingStencil
-  vtkIOLegacy
-  vtkIOImage
-  vtkIOXML
+  CommonColor
+  CommonCore
+  CommonDataModel
+  CommonTransforms
+  FiltersCore
+  FiltersGeneral
+  FiltersSources
+  ImagingStencil
+  IOLegacy
+  IOImage
+  IOXML
+  InteractionStyle
+  RenderingContextOpenGL2
+  RenderingCore
+  RenderingFreeType
+  RenderingGL2PSOpenGL2
+  RenderingOpenGL2
   QUIET
 )
 
@@ -23,8 +29,11 @@ if (NOT VTK_FOUND)
 endif()
 message (STATUS "VTK_VERSION: ${VTK_VERSION}")
 
+add_library(TestingHelper TestingHelper.cxx)
+target_link_libraries(TestingHelper PRIVATE ${VTK_LIBRARIES})
+
 add_executable(OvaryModelGenerator OvaryModelGenerator.cxx)
-target_link_libraries(OvaryModelGenerator PRIVATE ${VTK_LIBRARIES})
+target_link_libraries(OvaryModelGenerator PRIVATE ${VTK_LIBRARIES} TestingHelper)
 # vtk_module_autoinit is needed
 vtk_module_autoinit(
   TARGETS OvaryModelGenerator

@@ -16,6 +16,7 @@
 #include <vtkXMLPolyDataWriter.h>
 #include <vtkWindowedSincPolyDataFilter.h>
 
+#include "TestingHelper.h"
 /**
  * This program generates an ellipsoid (closed surface, vtkPolyData) and converts it into volume
  * representation (vtkImageData) where the foreground voxels are 1 and the background voxels are
