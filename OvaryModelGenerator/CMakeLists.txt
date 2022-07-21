@@ -20,6 +20,7 @@ find_package(VTK COMPONENTS
   RenderingFreeType
   RenderingGL2PSOpenGL2
   RenderingOpenGL2
+  IOExport
   QUIET
 )
 

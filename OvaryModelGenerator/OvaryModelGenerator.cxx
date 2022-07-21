@@ -15,6 +15,15 @@
 #include <vtkNIFTIImageWriter.h>
 #include <vtkXMLPolyDataWriter.h>
 #include <vtkWindowedSincPolyDataFilter.h>
+#include "TestingHelper.h"
+#include "vtkRenderer.h"
+#include "vtkRenderWindow.h"
+#include "vtkRenderWindowInteractor.h"
+#include "vtkPolyDataMapper.h"
+#include "vtkActor.h"
+#include "vtkNew.h"
+#include "vtkInteractorStyleSwitch.h"
+#include "vtkJSONSceneExporter.h"
 
 #include "TestingHelper.h"
 /**
@@ -25,7 +34,7 @@
  * label. Internally vtkPolyDataToImageStencil is utilized. The resultant multi-label image is saved to 
  * disk in NiFTI file format (Ovary.nii) and vtkPolyData format (Ovary.vtk).
  */
-
+using namespace std;
 int main(int argc, char* argv[])
 {
   // verify number of parameters in command line
@@ -228,7 +237,7 @@ int main(int argc, char* argv[])
   writer->SetInputData(mlImage);
   writer->Write();
 */
-
+ 
 
   // Run marching cubes on the image to convert it back to VTK polydata
   vtkPolyData *pipe_tail;
@@ -244,7 +253,7 @@ int main(int argc, char* argv[])
     imax = nrot * nslices;
 
   std::cout << "imax: " << imax << std::endl;
-
+  std::vector<vtkSmartPointer<vtkPolyData>> vec;
   for (float i = 1; i <= imax; i += 1.0)
     {
     
@@ -262,83 +271,68 @@ int main(int argc, char* argv[])
     fltDMC->SetValue(0, lbl);
     fltDMC->Update();
 
-    vtkPolyData *labelMesh = fltDMC->GetOutput();
+    vtkSmartPointer<vtkPolyData> labelMesh = fltDMC->GetOutput();
 
     // Set scalar values for the label
     vtkUnsignedShortArray *scalar = vtkUnsignedShortArray::New();
     scalar->SetNumberOfComponents(1);
     for (vtkIdType i = 0; i < labelMesh->GetNumberOfPoints(); ++i)
-      {
+    {
       scalar->InsertNextTuple1(lbl);
-      }
+    }
 
     scalar->SetName("Label");
     labelMesh->GetPointData()->SetScalars(scalar);
-    fltAppend->AddInputData(labelMesh);
-    }
-
-  fltAppend->Update();
-  pipe_tail = fltAppend->GetOutput();
-
-  // Create the transform filter
-  vtkTransformPolyDataFilter *fltTransform = vtkTransformPolyDataFilter::New();
-  fltTransform->SetInputData(pipe_tail);
- 
-  // Compute the transform from VTK coordinates to NIFTI/RAS coordinates
-  // typedef vnl_matrix_fixed<double, 4, 4> Mat44;
-  // Mat44 vtk2out = ConstructVTKtoNiftiTransform(
-  // mlImage->GetDirection().GetVnlMatrix(),
-  // mlImage->GetOrigin().GetVnlVector(),
-  // mlImage->GetSpacing().GetVnlVector());
-
-  vtkSmartPointer<vtkTransform> vox2coords =
+    vtkTransformPolyDataFilter *fltTransform = vtkTransformPolyDataFilter::New();
+    fltTransform->SetInputData(labelMesh);
+    vtkSmartPointer<vtkTransform> vox2coords =
     vtkSmartPointer<vtkTransform>::New();
-  //vox2coords->Scale(spacing[0],spacing[1],spacing[2]);
-  vox2coords->Translate(0.2,0.2,0.2);
-
-  // Update the VTK transform to match
-  // vtkTransform *transform = vtkTransform::New();
-  // transform->SetMatrix(vtk2out.data_block());
-  fltTransform->SetTransform(vox2coords);
-  fltTransform->Update();
-
-  // Get final output
-  vtkPolyData *mesh = fltTransform->GetOutput();
-
-  // Flip normals if determinant of SFORM is negative
-  //if(transform->GetMatrix()->Determinant() < 0)
-  //  {
-  //  vtkPointData *pd = mesh->GetPointData();
-  //  vtkDataArray *nrm = pd->GetNormals();
-  //  for(size_t i = 0; i < (size_t)nrm->GetNumberOfTuples(); i++)
-  //    for(size_t j = 0; j < (size_t)nrm->GetNumberOfComponents(); j++)
-  //      nrm->SetComponent(i,j,-nrm->GetComponent(i,j));
-  //  nrm->Modified();
-  //  }
-
-  // write the label mesh
-  /*
-  vtkSmartPointer<vtkPolyDataWriter> meshWriter = 
-    vtkSmartPointer<vtkPolyDataWriter>::New();
+    vox2coords->Translate(0.2,0.2,0.2);
+    fltTransform->SetTransform(vox2coords);
+    fltTransform->Update();
+    vtkNew<vtkWindowedSincPolyDataFilter> smoothFilter;
+    smoothFilter->SetInputData(fltTransform->GetOutput());
+    smoothFilter->SetNumberOfIterations(20);
+    smoothFilter->SetPassBand(0.001);
+    smoothFilter->SetNonManifoldSmoothing(false);
+    smoothFilter->Update();
+    vec.push_back(smoothFilter->GetOutput());
+  }
   
-  meshWriter->SetFileName(fnmesh.c_str());
-  meshWriter->SetInputData(mesh);
-  meshWriter->Write();
-  */
-
-  // smoothing
-  vtkNew<vtkWindowedSincPolyDataFilter> smoothFilter;
-  smoothFilter->SetInputData(mesh);
-  smoothFilter->SetNumberOfIterations(20);
-  smoothFilter->SetPassBand(0.001);
-  smoothFilter->SetNonManifoldSmoothing(false);
-  smoothFilter->Update();
   
   // write vtp mesh
-  vtkNew<vtkXMLPolyDataWriter> xmlWriter;
-  xmlWriter->SetFileName(fnxml.c_str());
-  xmlWriter->SetInputData(smoothFilter->GetOutput());
-  xmlWriter->Write();
 
+  vtkNew<vtkRenderer> ren;
+  vtkNew<vtkRenderWindow> renWin;
+  vtkNew<vtkRenderWindowInteractor> iren;
+
+    
+  for(auto mesh : vec)
+  {
+      vtkNew<vtkActor> actor;
+      vtkNew<vtkPolyDataMapper> mapper;
+      mapper->SetInputData(mesh);
+      actor->SetMapper(mapper);
+      ren->AddActor(actor);
+  }
+    
+  renWin->AddRenderer(ren);
+
+  iren->SetRenderWindow(renWin);
+  vtkNew<vtkInteractorStyleSwitch> iSwitch;
+  iSwitch->SetCurrentStyleToTrackballCamera();
+  iren->SetInteractorStyle(iSwitch);
+
+  renWin->SetSize(800, 600);
+  ren->SetBackground(0.4, 0.5, 0.6);
+  ren->ResetCamera();
+  // ren->Render();
+  iren->Initialize();
+
+  vtkNew<vtkJSONSceneExporter> exp;
+  exp->SetRenderWindow(renWin);
+  exp->SetActiveRenderer(ren);
+  exp->SetFileName(fnjson.c_str());
+  exp->Write();
   return EXIT_SUCCESS;
 }
