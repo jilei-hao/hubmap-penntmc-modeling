@@ -58,7 +58,12 @@ int main(int argc, char* argv[])
   double h = atoi(argv[4]);
   double w = atoi(argv[5]);
   const char *outdir = (argc < 7 ? "./output" : argv[6]);
-
+  std::cout<<outdir<<endl;
+  if (nslices != 1 && nslices != 3 && nslices != 12)
+  {
+      std:cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
+      return EXIT_FAILURE;
+  }
   // if outdir does not include a '/', add it
   std::string outdirstr = outdir;
   outdirstr += ((outdir[strlen(outdir) - 1] == '/') ? "" : "/"); 
@@ -178,7 +183,7 @@ int main(int argc, char* argv[])
         unsigned char* pix = 
           static_cast<unsigned char*>(mlImage->GetScalarPointer(i,j,k));
 
-        // pixel physical coordinates
+        // pixel physical coordinates 
         int ijk[3];
         ijk[0] = i;
         ijk[1] = j;
@@ -222,6 +227,11 @@ int main(int argc, char* argv[])
             else
               pix[0] = pix[0] + pix[0]*(slice_num-1+3*nslices);
             }
+          }
+          else
+          {
+            std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
+            return EXIT_FAILURE;
           }
         }
       }
