@@ -16,6 +16,15 @@
 #include <vtkNIFTIImageWriter.h>
 #include <vtkXMLPolyDataWriter.h>
 #include <vtkWindowedSincPolyDataFilter.h>
+#include "TestingHelper.h"
+#include "vtkRenderer.h"
+#include "vtkRenderWindow.h"
+#include "vtkRenderWindowInteractor.h"
+#include "vtkPolyDataMapper.h"
+#include "vtkActor.h"
+#include "vtkNew.h"
+#include "vtkInteractorStyleSwitch.h"
+#include "vtkJSONSceneExporter.h"
 
 // Includes for pelvis model
   //First converted from .glb to a multiblock dataset
@@ -35,7 +44,7 @@
  * label. Internally vtkPolyDataToImageStencil is utilized. The resultant multi-label image is saved to 
  * disk in NiFTI file format (Ovary.nii) and vtkPolyData format (Ovary.vtk).
  */
-
+using namespace std;
 int main(int argc, char* argv[])
 {
   // verify number of parameters in command line
@@ -59,7 +68,12 @@ int main(int argc, char* argv[])
   double h = atoi(argv[4]);
   double w = atoi(argv[5]);
   const char *outdir = (argc < 7 ? "./output" : argv[6]);
-
+  std::cout<<outdir<<endl;
+  if (nslices != 1 && nslices != 3 && nslices != 12)
+  {
+      std:cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
+      return EXIT_FAILURE;
+  }
   // if outdir does not include a '/', add it
   std::string outdirstr = outdir;
   outdirstr += ((outdir[strlen(outdir) - 1] == '/') ? "" : "/"); 
@@ -263,7 +277,7 @@ int main(int argc, char* argv[])
         unsigned char* pix = 
           static_cast<unsigned char*>(mlImage->GetScalarPointer(i,j,k));
 
-        // pixel physical coordinates
+        // pixel physical coordinates 
         int ijk[3];
         ijk[0] = i;
         ijk[1] = j;
@@ -308,6 +322,11 @@ int main(int argc, char* argv[])
               pix[0] = pix[0] + pix[0]*(slice_num-1+3*nslices);
             }
           }
+          else
+          {
+            std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
+            return EXIT_FAILURE;
+          }
         }
       }
     }
@@ -322,7 +341,7 @@ int main(int argc, char* argv[])
   writer->SetInputData(mlImage);
   writer->Write();
 */
-
+ 
 
   // Run marching cubes on the image to convert it back to VTK polydata
   vtkPolyData *pipe_tail;
@@ -338,7 +357,7 @@ int main(int argc, char* argv[])
     imax = nrot * nslices;
 
   std::cout << "imax: " << imax << std::endl;
-
+  std::vector<vtkSmartPointer<vtkPolyData>> vec;
   for (float i = 1; i <= imax; i += 1.0)
     {
     
@@ -356,15 +375,15 @@ int main(int argc, char* argv[])
     fltDMC->SetValue(0, lbl);
     fltDMC->Update();
 
-    vtkPolyData *labelMesh = fltDMC->GetOutput();
+    vtkSmartPointer<vtkPolyData> labelMesh = fltDMC->GetOutput();
 
     // Set scalar values for the label
     vtkUnsignedShortArray *scalar = vtkUnsignedShortArray::New();
     scalar->SetNumberOfComponents(1);
     for (vtkIdType i = 0; i < labelMesh->GetNumberOfPoints(); ++i)
-      {
+    {
       scalar->InsertNextTuple1(lbl);
-      }
+    }
 
     scalar->SetName("Label");
     labelMesh->GetPointData()->SetScalars(scalar);
@@ -377,22 +396,12 @@ int main(int argc, char* argv[])
   // Create the transform filter for ovary
   vtkTransformPolyDataFilter *fltTransform = vtkTransformPolyDataFilter::New();
   fltTransform->SetInputData(pipe_tail);
- 
-  // Compute the transform from VTK coordinates to NIFTI/RAS coordinates
-  // typedef vnl_matrix_fixed<double, 4, 4> Mat44;
-  // Mat44 vtk2out = ConstructVTKtoNiftiTransform(
-  // mlImage->GetDirection().GetVnlMatrix(),
-  // mlImage->GetOrigin().GetVnlVector(),
-  // mlImage->GetSpacing().GetVnlVector());
 
   vtkSmartPointer<vtkTransform> vox2coords =
     vtkSmartPointer<vtkTransform>::New();
-  //vox2coords->Scale(spacing[0],spacing[1],spacing[2]);
   vox2coords->Translate(0.2,0.2,0.2);
 
   // Update the VTK transform to match
-  // vtkTransform *transform = vtkTransform::New();
-  // transform->SetMatrix(vtk2out.data_block());
   fltTransform->SetTransform(vox2coords);
   fltTransform->Update();
 
@@ -452,19 +461,6 @@ int main(int argc, char* argv[])
 
     //Retrieving output polydata of filter application
   vtkSmartPointer<vtkPolyData> pelFinal_pd = pelTransformFilter->GetOutput();
-  
-
-
-  // Flip normals if determinant of SFORM is negative
-  //if(transform->GetMatrix()->Determinant() < 0)
-  //  {
-  //  vtkPointData *pd = mesh->GetPointData();
-  //  vtkDataArray *nrm = pd->GetNormals();
-  //  for(size_t i = 0; i < (size_t)nrm->GetNumberOfTuples(); i++)
-  //    for(size_t j = 0; j < (size_t)nrm->GetNumberOfComponents(); j++)
-  //      nrm->SetComponent(i,j,-nrm->GetComponent(i,j));
-  //  nrm->Modified();
-  //  }
 
   // write the label mesh
   /*
@@ -483,18 +479,48 @@ int main(int argc, char* argv[])
   smoothFilter->SetPassBand(0.001);
   smoothFilter->SetNonManifoldSmoothing(false);
   smoothFilter->Update();
+  
+  vec.push_back(smoothFilter->GetOutput());
 
   //write pelvis vtp
   vtkNew<vtkXMLPolyDataWriter> xmlPelWriter;
   xmlPelWriter->SetFileName(fnxmlpel.c_str());
   xmlPelWriter->SetInputData(pelFinal_pd);
   xmlPelWriter->Write();
-
+  
   // write vtp mesh
-  vtkNew<vtkXMLPolyDataWriter> xmlWriter;
-  xmlWriter->SetFileName(fnxml.c_str());
-  xmlWriter->SetInputData(smoothFilter->GetOutput());
-  xmlWriter->Write();
 
+  vtkNew<vtkRenderer> ren;
+  vtkNew<vtkRenderWindow> renWin;
+  vtkNew<vtkRenderWindowInteractor> iren;
+
+    
+  for(auto mesh : vec)
+  {
+      vtkNew<vtkActor> actor;
+      vtkNew<vtkPolyDataMapper> mapper;
+      mapper->SetInputData(mesh);
+      actor->SetMapper(mapper);
+      ren->AddActor(actor);
+  }
+    
+  renWin->AddRenderer(ren);
+
+  iren->SetRenderWindow(renWin);
+  vtkNew<vtkInteractorStyleSwitch> iSwitch;
+  iSwitch->SetCurrentStyleToTrackballCamera();
+  iren->SetInteractorStyle(iSwitch);
+
+  renWin->SetSize(800, 600);
+  ren->SetBackground(0.4, 0.5, 0.6);
+  ren->ResetCamera();
+  // ren->Render();
+  iren->Initialize();
+
+  vtkNew<vtkJSONSceneExporter> exp;
+  exp->SetRenderWindow(renWin);
+  exp->SetActiveRenderer(ren);
+  exp->SetFileName(fnjson.c_str());
+  exp->Write();
   return EXIT_SUCCESS;
 }
