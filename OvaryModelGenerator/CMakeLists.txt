@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 PROJECT(OvaryModelGenerator)
-
+message(${VTK_DIR})
 find_package(VTK COMPONENTS 
   CommonColor
   CommonCore
@@ -9,8 +9,11 @@ find_package(VTK COMPONENTS
   CommonTransforms
   FiltersCore
   FiltersGeneral
+  FiltersGeometry
   FiltersSources
+  FiltersPoints
   ImagingStencil
+  IOGeometry
   IOLegacy
   IOImage
   IOXML
