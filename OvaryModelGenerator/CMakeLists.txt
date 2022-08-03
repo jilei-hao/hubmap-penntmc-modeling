@@ -17,6 +17,7 @@ find_package(VTK COMPONENTS
   IOLegacy
   IOImage
   IOXML
+  IOExport
   InteractionStyle
   RenderingContextOpenGL2
   RenderingCore
@@ -40,7 +41,7 @@ message (STATUS "VTK_VERSION: ${VTK_VERSION}")
 add_library(TestingHelper TestingHelper.cxx)
 target_link_libraries(TestingHelper PRIVATE ${VTK_LIBRARIES})
 
-add_executable(OvaryModelGenerator OvaryModelGenerator.cxx)
+add_executable(OvaryModelGenerator OvaryModelGenerator.cxx ColorTable.hxx)
 target_link_libraries(OvaryModelGenerator PRIVATE ${VTK_LIBRARIES} TestingHelper ${LibArchive_LIBRARIES})
 target_include_directories(OvaryModelGenerator PRIVATE ${LibArchive_INCLUDE_DIRS})
 
