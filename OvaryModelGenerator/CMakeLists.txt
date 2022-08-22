@@ -39,13 +39,16 @@ if (NOT VTK_FOUND)
 endif()
 message (STATUS "VTK_VERSION: ${VTK_VERSION}")
 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/data/VH_F_Pelvis.glb ${CMAKE_CURRENT_BINARY_DIR}/data/VH_F_Pelvis.glb COPYONLY)
+
 add_library(TestingHelper TestingHelper.cxx)
 target_link_libraries(TestingHelper PRIVATE ${VTK_LIBRARIES})
+
 
 # target_link_libraries(Main PRIVATE ${VTK_LIBRARIES})
 add_library(OvaryModelGenerator OvaryModelGenerator.cxx)
 add_executable(Main Main.cxx)
-target_link_libraries(Main PRIVATE ${VTK_LIBRARIES} OvaryModelGenerator)
+target_link_libraries(Main PRIVATE ${VTK_LIBRARIES} OvaryModelGenerator PelvisModelGenerator.cxx)
 target_link_libraries(OvaryModelGenerator PRIVATE ${VTK_LIBRARIES} TestingHelper)
 target_include_directories(OvaryModelGenerator PRIVATE)
 

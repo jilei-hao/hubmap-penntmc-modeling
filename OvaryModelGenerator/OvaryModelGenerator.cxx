@@ -1,7 +1,6 @@
 #include <vtkSmartPointer.h>
 #include <vtkPolyData.h>
 #include <vtkTransform.h>
-//#include <vtkTransformFilter.h>
 #include <vtkTransformPolyDataFilter.h>
 #include <vtkImageData.h>
 #include <vtkSphereSource.h>
@@ -29,7 +28,6 @@
 #include "vtkProperty.h"
 #include "ColorTable.hxx"
 #include "vtkLookupTable.h"
-#include "OvaryModelGenerator.h"
 
 // Includes for pelvis model
   //First converted from .glb to a multiblock dataset
@@ -47,6 +45,7 @@
  * label. Internally vtkPolyDataToImageStencil is utilized. The resultant multi-label image is saved to 
  * disk in NiFTI file format (Ovary.nii) and vtkPolyData format (Ovary.vtk).
  */
+
 OvaryModelGenerator::OvaryModelGenerator(int slice, int rot, double de, double he, double wi, std::string outdir)
 {
   this->SetLongAxisSlices(slice);
@@ -144,18 +143,18 @@ OvaryModelGenerator::Generate()
 {
 // compute dimensions
   double Rsphere = 30;
-  double sx = 0.5*d/Rsphere;
-  double sy = 0.5*h/Rsphere;
-  double sz = 0.5*w/Rsphere;
+  double sx = 0.5*sd/Rsphere;
+  double sy = 0.5*sh/Rsphere;
+  double sz = 0.5*sw/Rsphere;
 
   // create a spheroid with specified dimensions
-  vtkSmartPointer<vtkSphereSource> sphereSource = 
-    vtkSmartPointer<vtkSphereSource>::New();  
+  vtkNew<vtkSphereSource> sphereSource;
   sphereSource->SetThetaResolution(100);
   sphereSource->SetPhiResolution(100);
   sphereSource->SetRadius(Rsphere);
   vtkSmartPointer<vtkPolyData> pd = sphereSource->GetOutput();
   sphereSource->Update();
+
 
   vtkSmartPointer<vtkTransform> rescale = 
     vtkSmartPointer<vtkTransform>::New();
@@ -169,8 +168,7 @@ OvaryModelGenerator::Generate()
   vtkSmartPointer<vtkPolyData> pd_trans = rescaleFilter->GetOutput();
 
   // create an image of the spheroid
-  vtkSmartPointer<vtkImageData> whiteImage = 
-    vtkSmartPointer<vtkImageData>::New();    
+  vtkNew<vtkImageData> whiteImage;  
   double bounds[6];
   pd_trans->GetBounds(bounds);
   double spacing[3]; // desired volume spacing
@@ -183,10 +181,7 @@ OvaryModelGenerator::Generate()
   int dim[3];
   for (int i = 0; i < 3; i++)
     {
-    //dim[i] = static_cast<int>(ceil((bounds[i * 2 + 1] - bounds[i * 2]) / spacing[i])+1);
     dim[i] = static_cast<int>(ceil((bounds[5] - bounds[4])/spacing[2])+1); 
-    //std::cerr << "dim " << dim[i] << std::endl;
-    //std::cerr << "bounds[] " << bounds[3] << " " << bounds[4] << " " << bounds[5] << endl;
     }
   whiteImage->SetDimensions(dim);
   whiteImage->SetExtent(-1, dim[0] - 1, -1, dim[1] - 1, -1, dim[2] - 1);
@@ -207,6 +202,7 @@ OvaryModelGenerator::Generate()
     {
     whiteImage->GetPointData()->GetScalars()->SetTuple1(i, inval);
     }
+
 
       // polygonal data --> image stencil:
       vtkNew<vtkPolyDataToImageStencil> pol2stenc;
@@ -306,7 +302,7 @@ OvaryModelGenerator::Generate()
   writer->SetInputData(mlImage);
   writer->Write();
 */
-
+ 
 
   // Run marching cubes on the image to convert it back to VTK polydata
   vtkPolyData *pipe_tail;
@@ -382,6 +378,7 @@ OvaryModelGenerator::Generate()
     // return vec;
 }
 
+
 void
 OvaryModelGenerator::GetOutput(std::vector<vtkSmartPointer<vtkPolyData>> vec, int imax)
 {
@@ -436,7 +433,6 @@ OvaryModelGenerator::GetOutput(std::vector<vtkSmartPointer<vtkPolyData>> vec, in
   // pvsActor->SetMapper(pvsMapper);
   // pvsActor->GetProperty()->SetOpacity(0.05);
   // ren->AddActor(pvsActor);
-
 
 
   renWin->AddRenderer(ren);
