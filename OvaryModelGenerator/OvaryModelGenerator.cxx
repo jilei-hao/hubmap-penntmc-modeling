@@ -16,7 +16,6 @@
 #include <vtkXMLPolyDataWriter.h>
 #include <vtkWindowedSincPolyDataFilter.h>
 #include "TestingHelper.h"
-#include "PelvisModelGenerator.h"
 #include "vtkRenderer.h"
 #include "vtkRenderWindow.h"
 #include "vtkRenderWindowInteractor.h"
@@ -46,65 +45,103 @@
  * label. Internally vtkPolyDataToImageStencil is utilized. The resultant multi-label image is saved to 
  * disk in NiFTI file format (Ovary.nii) and vtkPolyData format (Ovary.vtk).
  */
-using namespace std;
-int main(int argc, char* argv[])
+
+OvaryModelGenerator::OvaryModelGenerator(int slice, int rot, double de, double he, double wi, std::string outdir)
 {
-  // verify number of parameters in command line
-  if( argc < 6 )
-    {
-    std::cerr << "Usage: " << std::endl;
-    std::cerr << argv[0] << " nslices nrot d h w outdir" << std::endl;
-    std::cerr << "  nslices is an integer number of sections along the long-axis" << std::endl;
-    std::cerr << "  nrot is an integer number of rotational sections (1, 2, or 4)" << std::endl;
-    std::cerr << "  d is the anterior-posterior (shortest) ovary dimension in mm" << std::endl;
-    std::cerr << "  h is the superior-inferior ovary dimension in mm" << std::endl; 
-    std::cerr << "  w is the medial-lateral (longest) ovary dimension in mm" << std::endl; 
-    std::cerr << "  outdir is the optional directory for the output files. Default is current directory" << std::endl;
-    return EXIT_FAILURE;
-    }
+  this->SetLongAxisSlices(slice);
+  this->SetRotationalSlices(rot);
+  this->SetDimensions(de, he, wi);
+  this->SetOutDir(outdir);
+}
+OvaryModelGenerator::~OvaryModelGenerator(){};
+OvaryModelGenerator::OvaryModelGenerator(const OvaryModelGenerator &other)
+{
+  this->nslices = other.nslices;
+  this->nrot = other.nrot;
+  this->d = other.d;
+  this->h = other.h;
+  this->w = other.w;
+  this->outdirstr = other.outdirstr;
+  // this->r::inputCheck();
+  this->SetDimensions(this->d, this->h, this->w);
+}
+// int
+// OvaryModelGenerator
+// ::inputCheck(boolean b)
+// {
+//   if (b)
+//   {
+//     if (nslices != 1 && nslices != 3 && nslices != 12)
+//     {
+//     std:cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
+//     return EXIT_FAILURE;
+//     }
+//   }
+//   if (nrot != 1 && nrot != 2 && nrot != 4)
+//   {
+//     std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
+//     return EXIT_FAILURE;
+//   }
+//   return 0;
+// }
+const double scaleRatio = 0.65;
+void
+OvaryModelGenerator::SetRotationalSlices(int rot)
+{
+  this->nrot = rot;
+  // int x = OvaryModelGenerator::nrot;
+  // if (x != 1 && x != 2 && x != 4)
+  // {
+  //   std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
+  //   return EXIT_FAILURE;
+  // }
+}
+void
+OvaryModelGenerator::SetOutDir(std::string out)
+{
+  this->outdirstr = out;
+}
+void
+OvaryModelGenerator::SetLongAxisSlices(int slice)
+{
+  this->nslices = slice;
+  // int x = OvaryModelGenerator::nslices;
+  // if (x != 1 && x != 3 && x != 12)
+  // {
+  //   std:cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
+  //   return EXIT_FAILURE;
+  // }
+  // return 0;
+}
+void
+OvaryModelGenerator::SetDimensions(double de, double he, double wi)
+{
+  this->d = de * scaleRatio;
+  this->h = he * scaleRatio;
+  this->w = wi * scaleRatio;
+}
+// public:
+//   void IncludePelvis(boolean f)
+//   {
+//   if (f)
+//   {
+//   std::string filename_p = "Pelvis";
+//   std::string fnxmlpel = outdirstr + filename_p + ".vtp";
+  
+//   //reads in data from the .glb file
+//   vtkNew<vtkGLTFReader> pelvisReader;
+//   pelvisReader->SetFileName("/Users/rohan/VSCodeWorkspace/PICSL_PROJ/hubmap-penntmc-modeling/OvaryModelGenerator/VH_F_Pelvis.glb");
+//   pelvisReader->Update();
 
-  // recover command line arguments
-  int nslices  = atoi(argv[1]);
-  int nrot = atoi(argv[2]);
-  double d = atoi(argv[3]);
-  double h = atoi(argv[4]);
-  double w = atoi(argv[5]);
+//   vtkSmartPointer<vtkMultiBlockDataSet> pelvis_mb = pelvisReader->GetOutput();
+//   //COMPLETE THIS LATER
+//   }
+// }
 
-  const double scaleRatio = 0.65;
-
-  // Experiment: shrink dims by 10
-  double sd, sh, sw;
-  sd = d * scaleRatio;
-  sh = h * scaleRatio;
-  sw = w * scaleRatio;
-
-  const char *outdir = (argc < 7 ? "./output" : argv[6]);
-  std::cout<<outdir<<endl;
-  if (nslices != 1 && nslices != 3 && nslices != 12)
-  {
-    std::cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
-    return EXIT_FAILURE;
-  }
-
-  if (nrot != 1 && nrot != 2 && nrot != 4)
-  {
-    std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
-    return EXIT_FAILURE;
-  }
-  // if outdir does not include a '/', add it
-  std::string outdirstr = outdir;
-  outdirstr += ((outdir[strlen(outdir) - 1] == '/') ? "" : "/"); 
-
-  std::string filename = "Ovary";
-  std::string filename_p = "Pelvis";
-  std::string fnimg = outdirstr + filename + ".nii";
-  std::string fnmesh = outdirstr + filename + ".vtk";
-  std::string fnxml = outdirstr + filename + ".vtp";
-  std::string fnxmlpel = outdirstr + filename_p + ".vtp";
-  std::string fnjson = outdirstr + filename;
-
-
-  // specifying spheroid scale
+void
+OvaryModelGenerator::Generate()
+{
+// compute dimensions
   double Rsphere = 30;
   double sx = 0.5*sd/Rsphere;
   double sy = 0.5*sh/Rsphere;
@@ -119,12 +156,12 @@ int main(int argc, char* argv[])
   sphereSource->Update();
 
 
-  //rescaling parameters for ovary
-  vtkNew<vtkTransform> rescale;
+  vtkSmartPointer<vtkTransform> rescale = 
+    vtkSmartPointer<vtkTransform>::New();
   rescale->Scale(sx, sy, sz);
 
-  //rescale ovary polydata
-  vtkNew<vtkTransformPolyDataFilter> rescaleFilter;
+  vtkSmartPointer<vtkTransformPolyDataFilter> rescaleFilter = 
+    vtkSmartPointer<vtkTransformPolyDataFilter>::New();
   rescaleFilter->SetInputConnection(sphereSource->GetOutputPort());
   rescaleFilter->SetTransform(rescale);
   rescaleFilter->Update();
@@ -166,8 +203,9 @@ int main(int argc, char* argv[])
     whiteImage->GetPointData()->GetScalars()->SetTuple1(i, inval);
     }
 
-  // polygonal data --> image stencil:
-  vtkNew<vtkPolyDataToImageStencil> pol2stenc;
+
+      // polygonal data --> image stencil:
+      vtkNew<vtkPolyDataToImageStencil> pol2stenc;
 
   pol2stenc->SetInputData(pd_trans);
   pol2stenc->SetOutputOrigin(origin);
@@ -216,12 +254,12 @@ int main(int argc, char* argv[])
         double* coords = 
           static_cast<double*>(mlImage->GetPoint(id));
 
-        if (nrot == 1)
+        if (this->nrot == 1)
           {
           pix[0] = pix[0] + pix[0]*(slice_num-1);
           }
 
-        if (nrot == 2)
+        if (this->nrot == 2)
           {        
           // determine which on side of the 45-deg plane the pixel is located 
           // and assign label
@@ -232,7 +270,7 @@ int main(int argc, char* argv[])
             pix[0] = pix[0] + pix[0]*(slice_num-1+nslices);
           }
 
-        if (nrot == 4)
+        if (this->nrot == 4)
           {
           double s45 = 0.7071*coords[0] + 0.7071*coords[1];
           double s135 = -0.7071*coords[0] + 0.7071*coords[1];
@@ -271,10 +309,10 @@ int main(int argc, char* argv[])
 
   // Extracting one label at a time and assigning label value
   float imax;
-  if (nrot == 0)
-    imax = nslices;
+  if (this->nrot == 0)
+    imax = this->nslices;
   else
-    imax = nrot * nslices;
+    imax = this->nrot * this->nslices;
 
   std::cout << "imax: " << imax << std::endl;
   std::vector<vtkSmartPointer<vtkPolyData>> vec;
@@ -336,16 +374,21 @@ int main(int argc, char* argv[])
     // Get final output
     vec.push_back(labelMesh);
     }
+    this->GetOutput(vec, imax);
+    // return vec;
+}
 
-  // Generate pelvis model
-  const float pelvisIntercristalDistancemm = 290;
-    
-  PelvisModelGenerator *pvsGen = new PelvisModelGenerator();
-  pvsGen->SetIntercristalDistancemm(pelvisIntercristalDistancemm);
-  pvsGen->Generate();
-  vtkSmartPointer<vtkPolyData> pelFinal_pd = pvsGen->GetOutput();
-    
-  delete pvsGen;
+
+void
+OvaryModelGenerator::GetOutput(std::vector<vtkSmartPointer<vtkPolyData>> vec, int imax)
+{
+  std::string filename = "Ovary";
+  std::string fnimg = outdirstr + filename + ".nii";
+  std::string fnmesh = outdirstr + filename + ".vtk";
+  std::string fnxml = outdirstr + filename + ".vtp";
+  // std::string fnxmlpel = outdirstr + filename_p + ".vtp";
+  std::string fnjson = outdirstr + filename;
+  // vec = Generate();
 
   // write vtp mesh
   vtkNew<vtkRenderer> ren;
@@ -384,12 +427,12 @@ int main(int argc, char* argv[])
       ren->AddActor(actor);
   }
 
-  vtkNew<vtkActor> pvsActor;
-  vtkNew<vtkPolyDataMapper> pvsMapper;
-  pvsMapper->SetInputData(pelFinal_pd);
-  pvsActor->SetMapper(pvsMapper);
-  pvsActor->GetProperty()->SetOpacity(0.05);
-  ren->AddActor(pvsActor);
+  // vtkNew<vtkActor> pvsActor;
+  // vtkNew<vtkPolyDataMapper> pvsMapper;
+  // pvsMapper->SetInputData(pelFinal_pd);
+  // pvsActor->SetMapper(pvsMapper);
+  // pvsActor->GetProperty()->SetOpacity(0.05);
+  // ren->AddActor(pvsActor);
 
 
   renWin->AddRenderer(ren);
@@ -413,16 +456,4 @@ int main(int argc, char* argv[])
   exp->SetActiveRenderer(ren);
   exp->SetFileName(fnjson.c_str());
   exp->Write();
-
-  // Export a vtp scene for troubleshooting
-  /*
-  vtkNew<vtkSingleVTPExporter> vtpExp;
-  vtpExp->SetRenderWindow(renWin);
-  vtpExp->SetActiveRenderer(ren);
-  std::string fnvtp = fnjson + ".vtp";
-  vtpExp->SetFileName(fnvtp.c_str());
-  vtpExp->Write();
-  */
-
-  return EXIT_SUCCESS;
 }

@@ -24,13 +24,18 @@ find_package(VTK COMPONENTS
   RenderingFreeType
   RenderingGL2PSOpenGL2
   RenderingOpenGL2
+  IOExport
   QUIET
 )
 
+# include(FindLibArchive)
+# if (NOT LibArchive_FOUND)
+#   message(FATAL_ERROR "Stopping Configuration: LibArchive not found")
+# endif()
+
+
 if (NOT VTK_FOUND)
-  message(${VTK_DIR})
-  message("Stopping Configuration: ${VTK_NOT_FOUND_MESSAGE}")
-  return()
+  message(FATAL_ERROR "Stopping Configuration: ${VTK_NOT_FOUND_MESSAGE}")
 endif()
 message (STATUS "VTK_VERSION: ${VTK_VERSION}")
 
@@ -39,8 +44,15 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/data/VH_F_Pelvis.glb ${CMAKE_CURRENT_
 add_library(TestingHelper TestingHelper.cxx)
 target_link_libraries(TestingHelper PRIVATE ${VTK_LIBRARIES})
 
-add_executable(OvaryModelGenerator OvaryModelGenerator.cxx PelvisModelGenerator.cxx)
+
+# target_link_libraries(Main PRIVATE ${VTK_LIBRARIES})
+add_library(OvaryModelGenerator OvaryModelGenerator.cxx)
+add_executable(Main Main.cxx)
+target_link_libraries(Main PRIVATE ${VTK_LIBRARIES} OvaryModelGenerator PelvisModelGenerator.cxx)
 target_link_libraries(OvaryModelGenerator PRIVATE ${VTK_LIBRARIES} TestingHelper)
+target_include_directories(OvaryModelGenerator PRIVATE)
+
+
 # vtk_module_autoinit is needed
 vtk_module_autoinit(
   TARGETS OvaryModelGenerator
