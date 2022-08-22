@@ -22,13 +22,6 @@ class OvaryModelGenerator
         void SetDimensions(double de, double he, double wi);
         void Generate();
         void GetOutput(std::vector<vtkSmartPointer<vtkPolyData>> vec, int imax);
-
-
-
-
-
-
-
 };
 
 #endif

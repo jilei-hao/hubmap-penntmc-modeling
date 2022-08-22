@@ -1,4 +1,6 @@
 #include "OvaryModelGenerator.h"
+#include "PelvisModelGenerator.h"
+
 int main(int argc, char* argv[])
 {
   // verify number of parameters in command line
@@ -33,7 +35,19 @@ int main(int argc, char* argv[])
     std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
     return EXIT_FAILURE;
   }
+
+    // Generate pelvis model
+  const float pelvisIntercristalDistancemm = 290;
+    
+  PelvisModelGenerator *pvsGen = new PelvisModelGenerator();
+  pvsGen->SetIntercristalDistancemm(pelvisIntercristalDistancemm);
+  pvsGen->Generate();
+  vtkSmartPointer<vtkPolyData> pelFinal_pd = pvsGen->GetOutput();
+    
+  delete pvsGen;
+
   OvaryModelGenerator myOvary(nslices, nrot, d, h, w, outdirstr);
   myOvary.Generate();
+
   return EXIT_SUCCESS;
 }
