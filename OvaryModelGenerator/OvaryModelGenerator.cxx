@@ -1,7 +1,6 @@
 #include <vtkSmartPointer.h>
 #include <vtkPolyData.h>
 #include <vtkTransform.h>
-//#include <vtkTransformFilter.h>
 #include <vtkTransformPolyDataFilter.h>
 #include <vtkImageData.h>
 #include <vtkSphereSource.h>
@@ -17,6 +16,7 @@
 #include <vtkXMLPolyDataWriter.h>
 #include <vtkWindowedSincPolyDataFilter.h>
 #include "TestingHelper.h"
+#include "PelvisModelGenerator.h"
 #include "vtkRenderer.h"
 #include "vtkRenderWindow.h"
 #include "vtkRenderWindowInteractor.h"
@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
   std::cout<<outdir<<endl;
   if (nslices != 1 && nslices != 3 && nslices != 12)
   {
-    std:cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
+    std::cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
     return EXIT_FAILURE;
   }
 
@@ -103,15 +103,6 @@ int main(int argc, char* argv[])
   std::string fnxmlpel = outdirstr + filename_p + ".vtp";
   std::string fnjson = outdirstr + filename;
 
-  // reading in pelvis data
-
-  //reads in data from the .glb file
-  vtkNew<vtkGLTFReader> pelvisReader;
-  pelvisReader->SetFileName("/Users/jileihao/data/data_hubmap/pelvis_model/VH_F_Pelvis.glb");
-  pelvisReader->Update();
-
-  //creates multiblock dataset to extract surface data from to convert into polydata
-  vtkSmartPointer<vtkMultiBlockDataSet> pelvis_mb = pelvisReader->GetOutput(); 
 
   // specifying spheroid scale
   double Rsphere = 30;
@@ -127,15 +118,6 @@ int main(int argc, char* argv[])
   vtkSmartPointer<vtkPolyData> pd = sphereSource->GetOutput();
   sphereSource->Update();
 
-  //convert pelvis model to polydata
-  //produces surface data from multiblock dataset
-  vtkNew<vtkDataSetSurfaceFilter> pelvis_surfaces; 
-  pelvis_surfaces->SetInputData(pelvis_mb);
-
-  //compiles surface data into a single polydata object
-  vtkNew<vtkCompositeDataGeometryFilter> pelvis_comp;
-  pelvis_comp->SetInputConnection(pelvis_surfaces->GetOutputPort());
-  pelvis_comp->Update();
 
   //rescaling parameters for ovary
   vtkNew<vtkTransform> rescale;
@@ -147,31 +129,6 @@ int main(int argc, char* argv[])
   rescaleFilter->SetTransform(rescale);
   rescaleFilter->Update();
   vtkSmartPointer<vtkPolyData> pd_trans = rescaleFilter->GetOutput();
-
-  //rescale pelvis polydata
-  vtkSmartPointer<vtkPolyData> pelvis_pd = pelvis_comp->GetOutput();
-
-  double pel_bounds[6];
-  pelvis_pd->GetBounds(pel_bounds);
-
-  double x_width;
-
-  double ovary_bounds[6];
-  pd_trans->GetBounds(ovary_bounds);
-  double z_ovaryDepth = ovary_bounds[5] - ovary_bounds[4];
-  x_width = pel_bounds[1] - pel_bounds[0];
-
-  //rescaling parameters for pelvis
-  double pelScale = 290 / x_width; //average intercristal distance / original model width = scale factor to get a 29 cm (avg width) pelvis
-  vtkNew<vtkTransform> pel_rescale;
-  pel_rescale->Scale(pelScale, pelScale, pelScale);
-
-  //rescale pelvis polydata
-  vtkNew<vtkTransformPolyDataFilter> rescalePelvisFilter;
-  rescalePelvisFilter->SetInputConnection(pelvis_comp->GetOutputPort());
-  rescalePelvisFilter->SetTransform(pel_rescale);
-  rescalePelvisFilter->Update();
-  vtkSmartPointer<vtkPolyData> pelvisTransform_pd = rescalePelvisFilter->GetOutput();
 
   // create an image of the spheroid
   vtkNew<vtkImageData> whiteImage;  
@@ -380,34 +337,15 @@ int main(int argc, char* argv[])
     vec.push_back(labelMesh);
     }
 
-  //Transforming pelvis model
-
-  double baseMatrix[16] = {1, 0, 0, 0,
-                           0, 1, 0, 0,
-                           0, 0, 1, 0,
-                           0, 0, 0, 1}; 
-
-  vtkTransform *pelTransform = vtkTransform::New();
-
-  //Rotation
-  pelTransform->RotateX(45);
-  pelTransform->RotateY(-90);
-  pelTransform->RotateZ(-10);
-  
-  //Translation
-  pelTransform->Translate(-30, -35, 80);
-
-  //Concatenate - allows for multiple transformation steps to be applied to a preset matrix
-  pelTransform->Concatenate(baseMatrix);
-
-  //Applying transformation to pelvis polydata
-  vtkTransformPolyDataFilter *pelTransformFilter = vtkTransformPolyDataFilter::New();
-  pelTransformFilter->SetTransform(pelTransform);
-  pelTransformFilter->SetInputData(pelvisTransform_pd);
-  pelTransformFilter->Update();
-
-  //Retrieving output polydata of filter application
-  vtkSmartPointer<vtkPolyData> pelFinal_pd = pelTransformFilter->GetOutput();
+  // Generate pelvis model
+  const float pelvisIntercristalDistancemm = 290;
+    
+  PelvisModelGenerator *pvsGen = new PelvisModelGenerator();
+  pvsGen->SetIntercristalDistancemm(pelvisIntercristalDistancemm);
+  pvsGen->Generate();
+  vtkSmartPointer<vtkPolyData> pelFinal_pd = pvsGen->GetOutput();
+    
+  delete pvsGen;
 
   // write vtp mesh
   vtkNew<vtkRenderer> ren;

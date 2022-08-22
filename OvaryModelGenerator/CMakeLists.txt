@@ -17,6 +17,7 @@ find_package(VTK COMPONENTS
   IOLegacy
   IOImage
   IOXML
+  IOExport
   InteractionStyle
   RenderingContextOpenGL2
   RenderingCore
@@ -33,10 +34,12 @@ if (NOT VTK_FOUND)
 endif()
 message (STATUS "VTK_VERSION: ${VTK_VERSION}")
 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/data/VH_F_Pelvis.glb ${CMAKE_CURRENT_BINARY_DIR}/data/VH_F_Pelvis.glb COPYONLY)
+
 add_library(TestingHelper TestingHelper.cxx)
 target_link_libraries(TestingHelper PRIVATE ${VTK_LIBRARIES})
 
-add_executable(OvaryModelGenerator OvaryModelGenerator.cxx)
+add_executable(OvaryModelGenerator OvaryModelGenerator.cxx PelvisModelGenerator.cxx)
 target_link_libraries(OvaryModelGenerator PRIVATE ${VTK_LIBRARIES} TestingHelper)
 # vtk_module_autoinit is needed
 vtk_module_autoinit(
