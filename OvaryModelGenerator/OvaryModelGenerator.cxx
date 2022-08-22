@@ -1,6 +1,7 @@
 #include <vtkSmartPointer.h>
 #include <vtkPolyData.h>
 #include <vtkTransform.h>
+//#include <vtkTransformFilter.h>
 #include <vtkTransformPolyDataFilter.h>
 #include <vtkImageData.h>
 #include <vtkSphereSource.h>
@@ -24,8 +25,19 @@
 #include "vtkNew.h"
 #include "vtkInteractorStyleSwitch.h"
 #include "vtkJSONSceneExporter.h"
+#include "vtkSingleVTPExporter.h"
+#include "vtkProperty.h"
+#include "ColorTable.hxx"
+#include "vtkLookupTable.h"
+#include "OvaryModelGenerator.h"
+// Includes for pelvis model
+  //First converted from .glb to a multiblock dataset
+#include <vtkGLTFReader.h>
+#include <vtkMultiBlockDataSet.h>
 
-#include "TestingHelper.h"
+  //Then from multiblock data to surface data to polydata
+#include <vtkDataSetSurfaceFilter.h>
+#include <vtkCompositeDataGeometryFilter.h>
 /**
  * This program generates an ellipsoid (closed surface, vtkPolyData) and converts it into volume
  * representation (vtkImageData) where the foreground voxels are 1 and the background voxels are
@@ -34,49 +46,101 @@
  * label. Internally vtkPolyDataToImageStencil is utilized. The resultant multi-label image is saved to 
  * disk in NiFTI file format (Ovary.nii) and vtkPolyData format (Ovary.vtk).
  */
-using namespace std;
-int main(int argc, char* argv[])
+OvaryModelGenerator::OvaryModelGenerator(int slice, int rot, double de, double he, double wi, std::string outdir)
 {
-  // verify number of parameters in command line
-  if( argc < 6 )
-    {
-    std::cerr << "Usage: " << std::endl;
-    std::cerr << argv[0] << " nslices nrot d h w outdir" << std::endl;
-    std::cerr << "  nslices is an integer number of sections along the long-axis" << std::endl;
-    std::cerr << "  nrot is an integer number of rotational sections (1, 2, or 4)" << std::endl;
-    std::cerr << "  d is the anterior-posterior (shortest) ovary dimension in mm" << std::endl;
-    std::cerr << "  h is the superior-inferior ovary dimension in mm" << std::endl; 
-    std::cerr << "  w is the medial-lateral (longest) ovary dimension in mm" << std::endl; 
-    std::cerr << "  outdir is the optional directory for the output files. Default is current directory" << std::endl;
-    return EXIT_FAILURE;
-    }
+  this->SetLongAxisSlices(slice);
+  this->SetRotationalSlices(rot);
+  this->SetDimensions(de, he, wi);
+  this->SetOutDir(outdir);
+}
+OvaryModelGenerator::~OvaryModelGenerator(){};
+OvaryModelGenerator::OvaryModelGenerator(const OvaryModelGenerator &other)
+{
+  this->nslices = other.nslices;
+  this->nrot = other.nrot;
+  this->d = other.d;
+  this->h = other.h;
+  this->w = other.w;
+  this->outdirstr = other.outdirstr;
+  // this->r::inputCheck();
+  this->SetDimensions(this->d, this->h, this->w);
+}
+// int
+// OvaryModelGenerator
+// ::inputCheck(boolean b)
+// {
+//   if (b)
+//   {
+//     if (nslices != 1 && nslices != 3 && nslices != 12)
+//     {
+//     std:cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
+//     return EXIT_FAILURE;
+//     }
+//   }
+//   if (nrot != 1 && nrot != 2 && nrot != 4)
+//   {
+//     std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
+//     return EXIT_FAILURE;
+//   }
+//   return 0;
+// }
+const double scaleRatio = 0.65;
+void
+OvaryModelGenerator::SetRotationalSlices(int rot)
+{
+  this->nrot = rot;
+  // int x = OvaryModelGenerator::nrot;
+  // if (x != 1 && x != 2 && x != 4)
+  // {
+  //   std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
+  //   return EXIT_FAILURE;
+  // }
+}
+void
+OvaryModelGenerator::SetOutDir(std::string out)
+{
+  this->outdirstr = out;
+}
+void
+OvaryModelGenerator::SetLongAxisSlices(int slice)
+{
+  this->nslices = slice;
+  // int x = OvaryModelGenerator::nslices;
+  // if (x != 1 && x != 3 && x != 12)
+  // {
+  //   std:cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
+  //   return EXIT_FAILURE;
+  // }
+  // return 0;
+}
+void
+OvaryModelGenerator::SetDimensions(double de, double he, double wi)
+{
+  this->d = de * scaleRatio;
+  this->h = he * scaleRatio;
+  this->w = wi * scaleRatio;
+}
+// public:
+//   void IncludePelvis(boolean f)
+//   {
+//   if (f)
+//   {
+//   std::string filename_p = "Pelvis";
+//   std::string fnxmlpel = outdirstr + filename_p + ".vtp";
+  
+//   //reads in data from the .glb file
+//   vtkNew<vtkGLTFReader> pelvisReader;
+//   pelvisReader->SetFileName("/Users/rohan/VSCodeWorkspace/PICSL_PROJ/hubmap-penntmc-modeling/OvaryModelGenerator/VH_F_Pelvis.glb");
+//   pelvisReader->Update();
 
-  // recover command line arguments
-  int nslices  = atoi(argv[1]);
-  int nrot = atoi(argv[2]);
-  double d = atoi(argv[3]);
-  double h = atoi(argv[4]);
-  double w = atoi(argv[5]);
-  const char *outdir = (argc < 7 ? "./output" : argv[6]);
-  std::cout<<outdir<<endl;
-  if (nslices != 1 && nslices != 3 && nslices != 12)
-  {
-      std:cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
-      return EXIT_FAILURE;
-  }
-  // if outdir does not include a '/', add it
-  std::string outdirstr = outdir;
-  outdirstr += ((outdir[strlen(outdir) - 1] == '/') ? "" : "/"); 
-
-  std::string filename = "Ovary";
-  std::string fnimg = outdirstr + filename + ".nii";
-  std::string fnmesh = outdirstr + filename + ".vtk";
-  std::string fnxml = outdirstr + filename + ".vtp";
-  std::string fnjson = outdirstr + filename;
-
-  //std::cout << "fnimg=" << fnimg << std::endl;
-  //std::cout << "fnmesh=" << fnmesh << std::endl;
-
+//   vtkSmartPointer<vtkMultiBlockDataSet> pelvis_mb = pelvisReader->GetOutput();
+//   //COMPLETE THIS LATER
+//   }
+// }
+void
+OvaryModelGenerator::Generate()
+{
+  // compute dimensions
   double Rsphere = 30;
   double sx = 0.5*d/Rsphere;
   double sy = 0.5*h/Rsphere;
@@ -142,9 +206,8 @@ int main(int argc, char* argv[])
     whiteImage->GetPointData()->GetScalars()->SetTuple1(i, inval);
     }
 
-  // polygonal data --> image stencil:
-  vtkSmartPointer<vtkPolyDataToImageStencil> pol2stenc = 
-    vtkSmartPointer<vtkPolyDataToImageStencil>::New();
+      // polygonal data --> image stencil:
+      vtkNew<vtkPolyDataToImageStencil> pol2stenc;
 
   pol2stenc->SetInputData(pd_trans);
   pol2stenc->SetOutputOrigin(origin);
@@ -193,12 +256,12 @@ int main(int argc, char* argv[])
         double* coords = 
           static_cast<double*>(mlImage->GetPoint(id));
 
-        if (nrot == 1)
+        if (this->nrot == 1)
           {
           pix[0] = pix[0] + pix[0]*(slice_num-1);
           }
 
-        if (nrot == 2)
+        if (this->nrot == 2)
           {        
           // determine which on side of the 45-deg plane the pixel is located 
           // and assign label
@@ -209,7 +272,7 @@ int main(int argc, char* argv[])
             pix[0] = pix[0] + pix[0]*(slice_num-1+nslices);
           }
 
-        if (nrot == 4)
+        if (this->nrot == 4)
           {
           double s45 = 0.7071*coords[0] + 0.7071*coords[1];
           double s135 = -0.7071*coords[0] + 0.7071*coords[1];
@@ -228,16 +291,10 @@ int main(int argc, char* argv[])
               pix[0] = pix[0] + pix[0]*(slice_num-1+3*nslices);
             }
           }
-          else
-          {
-            std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
-            return EXIT_FAILURE;
-          }
+
         }
       }
     }
-
-
 
 /*
   // write the label image for troubleshooting
@@ -247,32 +304,28 @@ int main(int argc, char* argv[])
   writer->SetInputData(mlImage);
   writer->Write();
 */
- 
+
 
   // Run marching cubes on the image to convert it back to VTK polydata
   vtkPolyData *pipe_tail;
 
-  // Append filter for assembling labels
-  vtkAppendPolyData *fltAppend = vtkAppendPolyData::New();
-
   // Extracting one label at a time and assigning label value
   float imax;
-  if (nrot == 0)
-    imax = nslices;
+  if (this->nrot == 0)
+    imax = this->nslices;
   else
-    imax = nrot * nslices;
+    imax = this->nrot * this->nslices;
 
   std::cout << "imax: " << imax << std::endl;
   std::vector<vtkSmartPointer<vtkPolyData>> vec;
   for (float i = 1; i <= imax; i += 1.0)
     {
-    
     float lbl = floor(i);
 
     std::cout << "  -- Processing Label: " << lbl << std::endl;
 
     // Extract one label
-    vtkDiscreteMarchingCubes *fltDMC = vtkDiscreteMarchingCubes::New();
+    vtkNew<vtkDiscreteMarchingCubes> fltDMC;
     fltDMC->SetInputData(mlImage);
     fltDMC->ComputeGradientsOff();
     fltDMC->ComputeScalarsOff();
@@ -283,66 +336,124 @@ int main(int argc, char* argv[])
 
     vtkSmartPointer<vtkPolyData> labelMesh = fltDMC->GetOutput();
 
-    // Set scalar values for the label
-    vtkUnsignedShortArray *scalar = vtkUnsignedShortArray::New();
-    scalar->SetNumberOfComponents(1);
-    for (vtkIdType i = 0; i < labelMesh->GetNumberOfPoints(); ++i)
-    {
-      scalar->InsertNextTuple1(lbl);
-    }
 
+    // Set scalar values for the label
+    vtkNew<vtkUnsignedShortArray> scalar;
+    scalar->SetNumberOfComponents(1);
+    scalar->InsertNextTuple1(lbl);
     scalar->SetName("Label");
-    labelMesh->GetPointData()->SetScalars(scalar);
+    labelMesh->GetFieldData()->AddArray(scalar);
+    
+    // Create the transform filter for ovary
     vtkTransformPolyDataFilter *fltTransform = vtkTransformPolyDataFilter::New();
     fltTransform->SetInputData(labelMesh);
+
     vtkSmartPointer<vtkTransform> vox2coords =
-    vtkSmartPointer<vtkTransform>::New();
-    vox2coords->Translate(0.2,0.2,0.2);
+      vtkSmartPointer<vtkTransform>::New();
+    vox2coords->Translate(0,0,0);
+
+    // Experiment: Scale size back
+    vtkNew<vtkTransform> scaleBack;
+    double sbr = 1/scaleRatio; // scale back ratio
+    scaleBack->Scale(sbr, sbr, sbr);
+    vox2coords->Concatenate(scaleBack);
+
+    // Update the VTK transform to match
     fltTransform->SetTransform(vox2coords);
     fltTransform->Update();
+    labelMesh = fltTransform->GetOutput();
+
+    // smoothing  
+    
     vtkNew<vtkWindowedSincPolyDataFilter> smoothFilter;
-    smoothFilter->SetInputData(fltTransform->GetOutput());
-    smoothFilter->SetNumberOfIterations(20);
-    smoothFilter->SetPassBand(0.001);
+    smoothFilter->SetInputData(labelMesh);
+    smoothFilter->SetNumberOfIterations(50);
+    smoothFilter->SetPassBand(0.05);
     smoothFilter->SetNonManifoldSmoothing(false);
     smoothFilter->Update();
-    vec.push_back(smoothFilter->GetOutput());
-  }
-  
-  
+    labelMesh = smoothFilter->GetOutput();
+    
+    // Get final output
+    vec.push_back(labelMesh);
+    }
+    this->GetOutput(vec, imax);
+    // return vec;
+}
+void
+OvaryModelGenerator::GetOutput(std::vector<vtkSmartPointer<vtkPolyData>> vec, int imax)
+{
+  std::string filename = "Ovary";
+  std::string fnimg = outdirstr + filename + ".nii";
+  std::string fnmesh = outdirstr + filename + ".vtk";
+  std::string fnxml = outdirstr + filename + ".vtp";
+  // std::string fnxmlpel = outdirstr + filename_p + ".vtp";
+  std::string fnjson = outdirstr + filename;
+  // vec = Generate();
   // write vtp mesh
-
   vtkNew<vtkRenderer> ren;
   vtkNew<vtkRenderWindow> renWin;
   vtkNew<vtkRenderWindowInteractor> iren;
 
-    
+  ColorTable *ct = new ColorTable();
+  vtkNew<vtkLookupTable> lut;
+  lut->SetRange(1, imax);
+  lut->SetSaturationRange(0.7, 1);
+  lut->SetValueRange(0.7, 1);
+  lut->Build();
   for(auto mesh : vec)
   {
       vtkNew<vtkActor> actor;
       vtkNew<vtkPolyDataMapper> mapper;
       mapper->SetInputData(mesh);
+
+      auto fd = mesh->GetFieldData();
+      auto label = fd->GetArray("Label")->GetTuple1(0);
+      
+      uint8_t r, g, b;
+      float a;
+      ct->GetLabelColor(label, r, g, b, a);
+
+      double c[3];
+
+      /*
+      c[0] = r/255.0;
+      c[1] = g/255.0;
+      c[2] = b/255.0;
+      */
+      lut->GetColor(label, c);
+      actor->GetProperty()->SetColor(c);
       actor->SetMapper(mapper);
       ren->AddActor(actor);
   }
-    
-  renWin->AddRenderer(ren);
 
+  // vtkNew<vtkActor> pvsActor;
+  // vtkNew<vtkPolyDataMapper> pvsMapper;
+  // pvsMapper->SetInputData(pelFinal_pd);
+  // pvsActor->SetMapper(pvsMapper);
+  // pvsActor->GetProperty()->SetOpacity(0.05);
+  // ren->AddActor(pvsActor);
+
+
+  renWin->AddRenderer(ren);
   iren->SetRenderWindow(renWin);
+  ren->SetBackground(0.32, 0.34, 0.43);
+  ren->ResetCamera();
+  iren->Initialize();
+  
+  
+  // Display structure for troubleshooting
+  /*
   vtkNew<vtkInteractorStyleSwitch> iSwitch;
   iSwitch->SetCurrentStyleToTrackballCamera();
   iren->SetInteractorStyle(iSwitch);
-
-  renWin->SetSize(800, 600);
-  ren->SetBackground(0.4, 0.5, 0.6);
-  ren->ResetCamera();
-  // ren->Render();
-  iren->Initialize();
+  ren->Render();
+  iren->Start();
+  */
 
   vtkNew<vtkJSONSceneExporter> exp;
   exp->SetRenderWindow(renWin);
   exp->SetActiveRenderer(ren);
   exp->SetFileName(fnjson.c_str());
   exp->Write();
-  return EXIT_SUCCESS;
+
 }
