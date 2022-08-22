@@ -28,10 +28,11 @@ find_package(VTK COMPONENTS
   QUIET
 )
 
-include(FindLibArchive)
-if (NOT LibArchive_FOUND)
-  message(FATAL_ERROR "Stopping Configuration: LibArchive not found")
-endif()
+# include(FindLibArchive)
+# if (NOT LibArchive_FOUND)
+#   message(FATAL_ERROR "Stopping Configuration: LibArchive not found")
+# endif()
+
 
 if (NOT VTK_FOUND)
   message(FATAL_ERROR "Stopping Configuration: ${VTK_NOT_FOUND_MESSAGE}")
@@ -41,9 +42,13 @@ message (STATUS "VTK_VERSION: ${VTK_VERSION}")
 add_library(TestingHelper TestingHelper.cxx)
 target_link_libraries(TestingHelper PRIVATE ${VTK_LIBRARIES})
 
-add_executable(OvaryModelGenerator OvaryModelGenerator.cxx ColorTable.hxx)
-target_link_libraries(OvaryModelGenerator PRIVATE ${VTK_LIBRARIES} TestingHelper ${LibArchive_LIBRARIES})
-target_include_directories(OvaryModelGenerator PRIVATE ${LibArchive_INCLUDE_DIRS})
+# target_link_libraries(Main PRIVATE ${VTK_LIBRARIES})
+add_library(OvaryModelGenerator OvaryModelGenerator.cxx)
+add_executable(Main Main.cxx)
+target_link_libraries(Main PRIVATE ${VTK_LIBRARIES} OvaryModelGenerator)
+target_link_libraries(OvaryModelGenerator PRIVATE ${VTK_LIBRARIES} TestingHelper)
+target_include_directories(OvaryModelGenerator PRIVATE)
+
 
 # vtk_module_autoinit is needed
 vtk_module_autoinit(
