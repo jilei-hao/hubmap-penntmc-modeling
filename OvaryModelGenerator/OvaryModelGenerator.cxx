@@ -47,72 +47,24 @@
  * disk in NiFTI file format (Ovary.nii) and vtkPolyData format (Ovary.vtk).
  */
 
-OvaryModelGenerator::OvaryModelGenerator(int slice, int rot, double de, double he, double wi, std::string outdir)
+OvaryModelGenerator::OvaryModelGenerator(int slice, int rot, double de, double he, double wi)
 {
   this->SetLongAxisSlices(slice);
   this->SetRotationalSlices(rot);
   this->SetDimensions(de, he, wi);
-  this->SetOutDir(outdir);
 }
 OvaryModelGenerator::~OvaryModelGenerator(){};
-OvaryModelGenerator::OvaryModelGenerator(const OvaryModelGenerator &other)
-{
-  this->nslices = other.nslices;
-  this->nrot = other.nrot;
-  this->d = other.d;
-  this->h = other.h;
-  this->w = other.w;
-  this->outdirstr = other.outdirstr;
-  // this->r::inputCheck();
-  this->SetDimensions(this->d, this->h, this->w);
-}
-// int
-// OvaryModelGenerator
-// ::inputCheck(boolean b)
-// {
-//   if (b)
-//   {
-//     if (nslices != 1 && nslices != 3 && nslices != 12)
-//     {
-//     std:cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
-//     return EXIT_FAILURE;
-//     }
-//   }
-//   if (nrot != 1 && nrot != 2 && nrot != 4)
-//   {
-//     std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
-//     return EXIT_FAILURE;
-//   }
-//   return 0;
-// }
-const double scaleRatio = 0.65;
+
 void
 OvaryModelGenerator::SetRotationalSlices(int rot)
 {
   this->nrot = rot;
-  // int x = OvaryModelGenerator::nrot;
-  // if (x != 1 && x != 2 && x != 4)
-  // {
-  //   std::cerr<<"Error: Can only input 1, 2, or 4 in the nrot field"<<endl;
-  //   return EXIT_FAILURE;
-  // }
 }
-void
-OvaryModelGenerator::SetOutDir(std::string out)
-{
-  this->outdirstr = out;
-}
+
 void
 OvaryModelGenerator::SetLongAxisSlices(int slice)
 {
   this->nslices = slice;
-  // int x = OvaryModelGenerator::nslices;
-  // if (x != 1 && x != 3 && x != 12)
-  // {
-  //   std:cerr<<"Error: nslices must be 1, 3, or 12"<<endl;
-  //   return EXIT_FAILURE;
-  // }
-  // return 0;
 }
 void
 OvaryModelGenerator::SetDimensions(double de, double he, double wi)
@@ -121,23 +73,7 @@ OvaryModelGenerator::SetDimensions(double de, double he, double wi)
   this->h = he * scaleRatio;
   this->w = wi * scaleRatio;
 }
-// public:
-//   void IncludePelvis(boolean f)
-//   {
-//   if (f)
-//   {
-//   std::string filename_p = "Pelvis";
-//   std::string fnxmlpel = outdirstr + filename_p + ".vtp";
-  
-//   //reads in data from the .glb file
-//   vtkNew<vtkGLTFReader> pelvisReader;
-//   pelvisReader->SetFileName("/Users/rohan/VSCodeWorkspace/PICSL_PROJ/hubmap-penntmc-modeling/OvaryModelGenerator/VH_F_Pelvis.glb");
-//   pelvisReader->Update();
 
-//   vtkSmartPointer<vtkMultiBlockDataSet> pelvis_mb = pelvisReader->GetOutput();
-//   //COMPLETE THIS LATER
-//   }
-// }
 
 void
 OvaryModelGenerator::Generate()
@@ -319,7 +255,6 @@ OvaryModelGenerator::Generate()
     imax = this->nrot * this->nslices;
 
   std::cout << "imax: " << imax << std::endl;
-  std::vector<vtkSmartPointer<vtkPolyData>> vec;
   for (float i = 1; i <= imax; i += 1.0)
     {
     float lbl = floor(i);
@@ -376,88 +311,31 @@ OvaryModelGenerator::Generate()
     labelMesh = smoothFilter->GetOutput();
     
     // Get final output
-    vec.push_back(labelMesh);
+    m_Output.push_back(labelMesh);
     }
-    this->GetOutput(vec, imax);
-    // return vec;
 }
 
-
-void
-OvaryModelGenerator::GetOutput(std::vector<vtkSmartPointer<vtkPolyData>> vec, int imax)
+std::vector<vtkSmartPointer<vtkPolyData>> &
+OvaryModelGenerator
+::GetOutput()
 {
-  std::string filename = "Ovary";
-  std::string fnimg = outdirstr + filename + ".nii";
-  std::string fnmesh = outdirstr + filename + ".vtk";
-  std::string fnxml = outdirstr + filename + ".vtp";
-  // std::string fnxmlpel = outdirstr + filename_p + ".vtp";
-  std::string fnjson = outdirstr + filename;
-  // vec = Generate();
-
-  // write vtp mesh
-  vtkNew<vtkRenderer> ren;
-  vtkNew<vtkRenderWindow> renWin;
-  vtkNew<vtkRenderWindowInteractor> iren;
-
-  ColorTable *ct = new ColorTable();
-  vtkNew<vtkLookupTable> lut;
-  lut->SetRange(1, imax);
-  lut->SetSaturationRange(0.7, 1);
-  lut->SetValueRange(0.7, 1);
-  lut->Build();
-  for(auto mesh : vec)
-  {
-      vtkNew<vtkActor> actor;
-      vtkNew<vtkPolyDataMapper> mapper;
-      mapper->SetInputData(mesh);
-
-      auto fd = mesh->GetFieldData();
-      auto label = fd->GetArray("Label")->GetTuple1(0);
-      
-      uint8_t r, g, b;
-      float a;
-      ct->GetLabelColor(label, r, g, b, a);
-
-      double c[3];
-
-      /*
-      c[0] = r/255.0;
-      c[1] = g/255.0;
-      c[2] = b/255.0;
-      */
-      lut->GetColor(label, c);
-      actor->GetProperty()->SetColor(c);
-      actor->SetMapper(mapper);
-      ren->AddActor(actor);
-  }
-
-  // vtkNew<vtkActor> pvsActor;
-  // vtkNew<vtkPolyDataMapper> pvsMapper;
-  // pvsMapper->SetInputData(pelFinal_pd);
-  // pvsActor->SetMapper(pvsMapper);
-  // pvsActor->GetProperty()->SetOpacity(0.05);
-  // ren->AddActor(pvsActor);
-
-
-  renWin->AddRenderer(ren);
-  iren->SetRenderWindow(renWin);
-  ren->SetBackground(0.32, 0.34, 0.43);
-  ren->ResetCamera();
-  iren->Initialize();
-  
-  
-  // Display structure for troubleshooting
-  /*
-  vtkNew<vtkInteractorStyleSwitch> iSwitch;
-  iSwitch->SetCurrentStyleToTrackballCamera();
-  iren->SetInteractorStyle(iSwitch);
-  ren->Render();
-  iren->Start();
-  */
-
-  vtkNew<vtkJSONSceneExporter> exp;
-  exp->SetRenderWindow(renWin);
-  exp->SetActiveRenderer(ren);
-  exp->SetFileName(fnjson.c_str());
-  exp->Write();
+  return m_Output;
 }
+
+// void
+// OvaryModelGenerator::GetOutput(std::vector<vtkSmartPointer<vtkPolyData>> vec, int imax)
+// {
+//   // vec = Generate();
+
+//   
+  
+  
+//   // Display structure for troubleshooting
+//   /*
+//   vtkNew<vtkInteractorStyleSwitch> iSwitch;
+//   iSwitch->SetCurrentStyleToTrackballCamera();
+//   iren->SetInteractorStyle(iSwitch);
+//   ren->Render();
+//   iren->Start();
+//   */
+// }

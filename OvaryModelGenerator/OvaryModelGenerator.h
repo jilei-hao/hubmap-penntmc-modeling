@@ -8,20 +8,24 @@
 class OvaryModelGenerator
 {
     public:
-        int nslices, nrot;
-        double d, h, w;
-        std::string outdirstr;
-
-        OvaryModelGenerator(int slice, int rot, double de, double he, double wi, std::string outdir);
+        OvaryModelGenerator(int slice, int rot, double de, double he, double wi);
         ~OvaryModelGenerator();
-        OvaryModelGenerator(const OvaryModelGenerator &other);
+        OvaryModelGenerator(const OvaryModelGenerator &other) = delete;
+        OvaryModelGenerator & operator= (const OvaryModelGenerator & other) = delete;
         // static int inputCheck();
         void SetRotationalSlices(int rot);
         void SetOutDir(std::string out);
         void SetLongAxisSlices(int slice);
         void SetDimensions(double de, double he, double wi);
         void Generate();
-        void GetOutput(std::vector<vtkSmartPointer<vtkPolyData>> vec, int imax);
+        std::vector<vtkSmartPointer<vtkPolyData>> &GetOutput();
+
+    private:
+        int nslices, nrot;
+        double d, h, w;
+        const double scaleRatio = 0.65;
+        std::vector<vtkSmartPointer<vtkPolyData>> m_Output;
+
 };
 
 #endif
