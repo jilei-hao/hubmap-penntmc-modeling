@@ -16,25 +16,16 @@
 
 PelvisModelGenerator::PelvisModelGenerator(){
 
-  this->intercristalDistance = 1;
-  this->pelvisScaleFactor = 1;
+  this->m_IntercristalDistance = 1;
+  this->m_PelvisScaleFactor = 1;
 
 };
 
 PelvisModelGenerator::~PelvisModelGenerator(){};
 
-PelvisModelGenerator::PelvisModelGenerator(const PelvisModelGenerator &other)
-{
-
-  this->intercristalDistance = other.intercristalDistance;
-  this->pelvisScaleFactor = other.pelvisScaleFactor;
-  this->pelvisOutputPolydata = other.pelvisOutputPolydata;
-
-}
-
 void PelvisModelGenerator::SetIntercristalDistancemm(float intercristalDistance){
 
-  this->intercristalDistance = intercristalDistance;
+  this->m_IntercristalDistance = intercristalDistance;
 
 };
 
@@ -69,10 +60,10 @@ void PelvisModelGenerator::Generate(){
   
     // uses intercristalDistance from set function
     // setting scale factor
-  this->pelvisScaleFactor = intercristalDistance / modelWidth; //average intercristal distance / original model width = scale factor to get a 29 cm (avg width) pelvis
+  this->m_PelvisScaleFactor = m_IntercristalDistance / modelWidth; //average intercristal distance / original model width = scale factor to get a 29 cm (avg width) pelvis
 
   vtkNew<vtkTransform> pelvisRescale;
-  pelvisRescale->Scale(pelvisScaleFactor, pelvisScaleFactor, pelvisScaleFactor);
+  pelvisRescale->Scale(m_PelvisScaleFactor, m_PelvisScaleFactor, m_PelvisScaleFactor);
 
     // apply rescale to filter
   vtkNew<vtkTransformPolyDataFilter> rescalePelvisFilter;
@@ -111,12 +102,12 @@ void PelvisModelGenerator::Generate(){
   // Retrieving output polydata of filter application
   vtkSmartPointer<vtkPolyData> pelFinal_pd = pelTransformFilter->GetOutput();
 
-  this->pelvisOutputPolydata = pelFinal_pd;
+  this->m_PelvisOutputPolydata = pelFinal_pd;
 
 };
 
 vtkPolyData* PelvisModelGenerator::GetOutput(){
 
-  return this->pelvisOutputPolydata;
+  return this->m_PelvisOutputPolydata;
 
 };
