@@ -1,5 +1,19 @@
+#include <iostream>
+#include <sstream>
+
 #include "OvaryModelGenerator.h"
 #include "PelvisModelGenerator.h"
+#include "vtkRenderer.h"
+#include "vtkRenderWindow.h"
+#include "vtkRenderWindowInteractor.h"
+#include "vtkPolyDataMapper.h"
+#include "vtkActor.h"
+#include "vtkNew.h"
+#include "vtkInteractorStyleSwitch.h"
+#include "vtkJSONSceneExporter.h"
+#include "vtkSingleVTPExporter.h"
+#include "vtkFieldData.h"
+
 
 int main(int argc, char* argv[])
 {
@@ -46,8 +60,37 @@ int main(int argc, char* argv[])
     
   delete pvsGen;
 
-  OvaryModelGenerator myOvary(nslices, nrot, d, h, w, outdirstr);
+  OvaryModelGenerator myOvary(nslices, nrot, d, h, w);
   myOvary.Generate();
+  auto ovarySections = myOvary.GetOutput();
+
+  // Model Writing Logic
+  vtkNew<vtkRenderer> ren;
+  vtkNew<vtkRenderWindow> renWin;
+  vtkNew<vtkRenderWindowInteractor> iren;
+
+  for(auto mesh : ovarySections)
+  {
+    vtkNew<vtkActor> actor;
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputData(mesh);
+    actor->SetMapper(mapper);
+    ren->AddActor(actor);
+  }
+  renWin->AddRenderer(ren);
+  iren->SetRenderWindow(renWin);
+  ren->SetBackground(0.32, 0.34, 0.43);
+  ren->ResetCamera();
+  iren->Initialize();
+
+  std::ostringstream fnOut;
+  fnOut << outdirstr << "Ovary";
+
+  vtkNew<vtkJSONSceneExporter> exporter;
+  exporter->SetInput(renWin);
+  exporter->SetActiveRenderer(ren);
+  exporter->SetFileName(fnOut.str().c_str());
+  exporter->Write();
 
   return EXIT_SUCCESS;
 }

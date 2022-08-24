@@ -47,8 +47,8 @@ target_link_libraries(TestingHelper PRIVATE ${VTK_LIBRARIES})
 
 # target_link_libraries(Main PRIVATE ${VTK_LIBRARIES})
 add_library(OvaryModelGenerator OvaryModelGenerator.cxx)
-add_executable(Main Main.cxx PelvisModelGenerator.cxx)
-target_link_libraries(Main PRIVATE ${VTK_LIBRARIES} OvaryModelGenerator)
+add_executable(ModelGenerator Main.cxx PelvisModelGenerator.cxx)
+target_link_libraries(ModelGenerator PRIVATE ${VTK_LIBRARIES} OvaryModelGenerator)
 target_link_libraries(OvaryModelGenerator PRIVATE ${VTK_LIBRARIES} TestingHelper)
 target_include_directories(OvaryModelGenerator PRIVATE)
 
